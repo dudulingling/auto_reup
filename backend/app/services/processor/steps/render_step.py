@@ -37,7 +37,7 @@ class RenderStep(ProcessorStep):
 
             if ColabBridge.is_enabled():
                 try:
-                    log_callback("[*] ☁️ Đang gửi dữ liệu sang Google Colab GPU (T4) để render NVENC...\n", progress=50.0)
+                    log_callback("[*] ☁️ [Colab T4] Đang gửi dữ liệu sang Google Colab để render NVENC...\n", progress=50.0)
                     speed_val = 1.05 if getattr(config, 'opt_speed', False) else 1.0
                     zoom_val = 1.03 if getattr(config, 'opt_zoom', False) else 1.0
                     audio_for_render = final_tts_audio or instrumental_audio_path
@@ -51,10 +51,10 @@ class RenderStep(ProcessorStep):
                         zoom_factor=zoom_val,
                         watermark_text=config.watermark_text if getattr(config, 'watermark_type', '') == 'text' else None
                     )
-                    log_callback("[+] ☁️ Colab T4 đã render NVENC hoàn tất!\n", progress=95.0)
+                    log_callback("[+] ☁️ [Colab T4] Đã render NVENC hoàn tất!\n", progress=95.0)
                     rendered_by_colab = True
                 except Exception as colab_err:
-                    log_callback(f"[!] Cảnh báo Colab NVENC: {colab_err}. Tự động chuyển sang render FFMPEG Local...\n")
+                    log_callback(f"[!] [Colab T4] Cảnh báo NVENC: {colab_err}. Tự động chuyển sang render FFMPEG Local...\n")
 
             if not rendered_by_colab:
                 video_editor.burn_subtitles(

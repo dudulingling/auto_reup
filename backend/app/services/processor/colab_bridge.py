@@ -121,24 +121,27 @@ class ColabBridge:
         data = res.json()
 
         os.makedirs(output_dir, exist_ok=True)
-        vocal_local = os.path.join(output_dir, "vocal.wav")
-        inst_local = os.path.join(output_dir, "instrumental.wav")
+        base = os.path.splitext(os.path.basename(audio_path))[0]
+        # Clean temporary suffixes to produce standard filenames matching glob patterns
+        base_clean = base.replace("_audio", "")
+        vocal_local = os.path.join(output_dir, f"{base_clean}_audio_(Vocals)_Kim_Vocal_2.wav")
+        inst_local = os.path.join(output_dir, f"{base_clean}_audio_(Instrumental)_Kim_Vocal_2.wav")
 
         if data.get("vocal_url"):
-            v_res = requests.get(f"{base_url}{data['vocal_url']}", stream=True, timeout=60)
+            v_res = requests.get(f"{base_url}{data['vocal_url']}", stream=True, timeout=120)
             with open(vocal_local, "wb") as f:
                 for chunk in v_res.iter_content(8192):
                     f.write(chunk)
 
         if data.get("instrumental_url"):
-            i_res = requests.get(f"{base_url}{data['instrumental_url']}", stream=True, timeout=60)
+            i_res = requests.get(f"{base_url}{data['instrumental_url']}", stream=True, timeout=120)
             with open(inst_local, "wb") as f:
                 for chunk in i_res.iter_content(8192):
                     f.write(chunk)
 
         return {
-            "vocal_path": vocal_local if os.path.exists(vocal_local) else None,
-            "instrumental_path": inst_local if os.path.exists(inst_local) else None,
+            "vocal_path": vocal_local if os.path.exists(vocal_local) and os.path.getsize(vocal_local) > 0 else None,
+            "instrumental_path": inst_local if os.path.exists(inst_local) and os.path.getsize(inst_local) > 0 else None,
         }
 
     @classmethod

@@ -32,6 +32,27 @@ def separate_audio_with_ai(audio_path: str, output_dir: str, log_callback=None):
     Sử dụng AI (UVR5/Demucs) để bóc tách giọng nói/giọng hát ra khỏi nhạc nền.
     Trả về (vocal_file, instrumental_file). Nếu thất bại trả về (audio_path, None).
     """
+    # 1. Ưu tiên kiểm tra xem Colab GPU có đang bật không
+    try:
+        from app.services.processor.colab_bridge import ColabBridge
+        if ColabBridge.is_enabled():
+            if log_callback:
+                log_callback("[*] ☁️ [Colab T4] Đang gửi audio sang Google Colab để tách giọng nói & nhạc nền (UVR5 GPU)...\n")
+            sep_res = ColabBridge.separate_audio(audio_path, output_dir)
+            v_path = sep_res.get("vocal_path")
+            i_path = sep_res.get("instrumental_path")
+            if v_path and os.path.exists(v_path):
+                if log_callback:
+                    log_callback("[+] ☁️ [Colab T4] Đã tách giọng nói & nhạc nền thành công qua GPU T4!\n")
+                return v_path, i_path
+            else:
+                if log_callback:
+                    log_callback("[!] [Colab T4] Không nhận được file tách từ Colab. Chuyển sang xử lý local...\n")
+    except Exception as colab_err:
+        if log_callback:
+            log_callback(f"[!] [Colab T4] Lỗi tách âm AI: {colab_err}. Tự động chuyển sang UVR5 Local...\n")
+
+    # 2. Xử lý local bằng audio_separator (chạy trên máy cục bộ)
     try:
         from audio_separator.separator import Separator
     except ImportError:

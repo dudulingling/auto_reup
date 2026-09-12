@@ -62,7 +62,7 @@ def health_check():
 
 
 @app.post("/api/gpu/transcribe")
-async def transcribe_audio(
+def transcribe_audio(
     file: UploadFile = File(...),
     model_size: str = Form("base"),
     language: Optional[str] = Form(None),
@@ -100,7 +100,7 @@ async def transcribe_audio(
 
 
 @app.post("/api/gpu/tts")
-async def generate_tts(
+def generate_tts(
     text: str = Form(...),
     voice: str = Form("female"),
     reference_file: Optional[UploadFile] = File(None),
@@ -138,7 +138,7 @@ async def generate_tts(
 
 
 @app.post("/api/gpu/separate-audio")
-async def separate_audio(
+def separate_audio(
     file: UploadFile = File(...),
 ):
     """
@@ -176,7 +176,7 @@ async def separate_audio(
 
 
 @app.post("/api/gpu/render-video")
-async def render_video(
+def render_video(
     video_file: UploadFile = File(...),
     audio_file: Optional[UploadFile] = File(None),
     srt_file: Optional[UploadFile] = File(None),

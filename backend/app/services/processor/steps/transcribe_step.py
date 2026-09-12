@@ -56,14 +56,14 @@ class TranscribeStep(ProcessorStep):
 
             if ColabBridge.is_enabled():
                 try:
-                    log_callback("[*] ☁️ Đang gửi audio sang Google Colab GPU (T4) để bóc tách Faster-Whisper...\n", progress=8.0)
+                    log_callback("[*] ☁️ [Colab T4] Đang gửi audio sang Google Colab để bóc tách Faster-Whisper...\n", progress=8.0)
                     colab_res = ColabBridge.transcribe_whisper(vocal_audio_path)
                     with open(orig_srt, "w", encoding="utf-8") as f:
                         f.write(colab_res.get("srt_content", ""))
-                    log_callback(f"[+] ☁️ Colab T4 đã bóc tách xong phụ đề ({colab_res.get('duration', 0)}s)!\n", progress=15.0)
+                    log_callback(f"[+] ☁️ [Colab T4] Đã bóc tách xong phụ đề ({colab_res.get('duration', 0)}s)!\n", progress=15.0)
                     used_colab = True
                 except Exception as colab_err:
-                    log_callback(f"[!] Cảnh báo Colab GPU: {colab_err}. Tự động chuyển sang Whisper Local...\n")
+                    log_callback(f"[!] [Colab T4] Cảnh báo Whisper: {colab_err}. Tự động chuyển sang Whisper Local...\n")
 
             if not used_colab:
                 if getattr(config, 'use_bcut_asr', False) or getattr(config, 'use_llm_segmentation', False):
