@@ -49,9 +49,9 @@ class RenderStep(ProcessorStep):
                         speed=speed_val,
                         flip_horizontal=getattr(config, 'flip_video', False),
                         zoom_factor=zoom_val,
-                        watermark_text=config.watermark_text if getattr(config, 'watermark_type', '') == 'text' else None
+                        watermark_text=config.watermark_text if getattr(config, 'watermark_type', '') == 'text' else None,
+                        log_callback=log_callback
                     )
-                    log_callback("[+] ☁️ [Colab T4] Đã render NVENC hoàn tất!\n", progress=95.0)
                     rendered_by_colab = True
                 except Exception as colab_err:
                     log_callback(f"[!] [Colab T4] Cảnh báo NVENC: {colab_err}. Tự động chuyển sang render FFMPEG Local...\n")

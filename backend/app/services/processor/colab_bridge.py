@@ -156,6 +156,7 @@ class ColabBridge:
         zoom_factor: float = 1.0,
         watermark_text: Optional[str] = None,
         timeout: int = 600,
+        log_callback=None,
     ) -> str:
         """Gửi video, audio và phụ đề sang Colab để render phần cứng NVENC."""
         _, base_url = cls.get_config()
@@ -180,14 +181,39 @@ class ColabBridge:
             files["srt_file"] = (os.path.basename(srt_path), open(srt_path, "rb"))
 
         try:
+            if log_callback:
+                log_callback("[*] ☁️ [Colab T4] Đang gửi dữ liệu video sang Google Colab để render NVENC...\n", progress=52.0)
+
             res = requests.post(url, data=data, files=files, timeout=timeout, stream=True)
             res.raise_for_status()
 
+            total_bytes = int(res.headers.get("content-length", 0))
+            total_mb = total_bytes / (1024 * 1024) if total_bytes > 0 else 0
+
+            if log_callback:
+                if total_mb > 0:
+                    log_callback(f"[+] ☁️ [Colab T4] GPU đã render xong! Đang tải video thành phẩm ({total_mb:.1f} MB) về máy...\n", progress=75.0)
+                else:
+                    log_callback("[+] ☁️ [Colab T4] GPU đã render xong! Đang tải video thành phẩm về máy...\n", progress=75.0)
+
             os.makedirs(os.path.dirname(os.path.abspath(output_video_path)), exist_ok=True)
+            downloaded = 0
+            last_reported_pct = 0
+
             with open(output_video_path, "wb") as f:
                 for chunk in res.iter_content(chunk_size=65536):
                     if chunk:
                         f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_bytes > 0 and log_callback:
+                            pct = int((downloaded / total_bytes) * 100)
+                            if pct - last_reported_pct >= 15:
+                                last_reported_pct = pct
+                                curr_prog = 75.0 + (pct / 100.0) * 20.0
+                                log_callback(f"[*] ☁️ [Colab T4] Đang nhận video: {downloaded/(1024*1024):.1f} MB / {total_mb:.1f} MB ({pct}%)...\n", progress=curr_prog)
+
+            if log_callback:
+                log_callback(f"[+] ☁️ [Colab T4] Đã nhận và lưu video thành phẩm an toàn: {os.path.basename(output_video_path)}\n", progress=95.0)
 
             return output_video_path
         finally:
