@@ -1,0 +1,17 @@
+# ==============================================================================
+# Mẫu cấu hình môi trường cho Colab GPU Server
+# Có thể lưu thành .env trên Google Drive (/content/drive/MyDrive/auto_reup_storage/.env)
+# ==============================================================================
+
+# Thiết lập thư mục lưu trữ vĩnh viễn trên Google Drive
+STORAGE_DIR=/content/drive/MyDrive/auto_reup_storage
+
+# Tăng tốc phần cứng GPU
+USE_GPU_ACCELERATION=true
+WHISPER_DEVICE=cuda
+WHISPER_COMPUTE_TYPE=float16
+
+# API Keys AI (Nếu muốn dùng thêm Gemini/Groq trên Colab)
+GEMINI_API_KEY=
+GROQ_API_KEY=
+USE_GROQ=false
