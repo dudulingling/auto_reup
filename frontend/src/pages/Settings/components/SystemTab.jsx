@@ -5,7 +5,10 @@ const SystemTab = ({
   checkingGpu, fetchGpuStatus, gpuStatus,
   enableHealthCheck, setEnableHealthCheck,
   healthCheckInterval, setHealthCheckInterval,
-  handleCheckNow
+  handleCheckNow,
+  useColabGpu, setUseColabGpu,
+  colabGpuUrl, setColabGpuUrl,
+  colabStatus, checkingColab, handleCheckColab
 }) => {
   return (
     <div className="space-y-6">
@@ -60,6 +63,89 @@ const SystemTab = ({
             </div>
           ) : (
             <p className="text-xs text-text-secondary italic">Chưa thực hiện quét phần cứng.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Google Colab T4 GPU Worker Card */}
+      <div className="bg-bg-tertiary/40 p-4 rounded-xl border border-border-subtle relative overflow-hidden">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base">☁️</span>
+            <div>
+              <label className="block text-sm font-bold text-text-primary">Google Colab GPU (Tesla T4 Miễn Phí)</label>
+              <span className="text-[10px] text-neon-purple font-mono uppercase tracking-wider font-semibold">Mô hình Lai (Hybrid Worker)</span>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={useColabGpu}
+              onChange={(e) => setUseColabGpu(e.target.checked)}
+            />
+            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-neon-purple"></div>
+          </label>
+        </div>
+        <p className="text-xs text-text-secondary mb-4">
+          Tự động điều phối các tác vụ nặng (Bóc tách phụ đề Faster-Whisper, Lồng tiếng VieNeu-TTS, Tách giọng UVR5, Render NVENC 60fps+) sang máy ảo Google Colab T4 16GB VRAM để xử lý siêu tốc.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-text-secondary mb-1.5">
+              Đường dẫn Cloudflare Tunnel Colab (Public HTTPS URL)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 bg-bg-secondary border border-border-subtle rounded-xl py-2 px-3 text-xs text-text-primary font-mono placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-neon-purple/50 transition-all"
+                placeholder="https://xyz-random-domain.trycloudflare.com"
+                value={colabGpuUrl}
+                onChange={(e) => setColabGpuUrl(e.target.value)}
+                disabled={!useColabGpu}
+              />
+              <button
+                type="button"
+                onClick={handleCheckColab}
+                disabled={!useColabGpu || checkingColab || !colabGpuUrl?.trim()}
+                className="bg-neon-purple/20 hover:bg-neon-purple/30 text-neon-purple border border-neon-purple/40 px-3 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+              >
+                {checkingColab ? (
+                  <>
+                    <span className="w-3 h-3 border-2 border-neon-purple border-t-transparent rounded-full animate-spin"></span>
+                    <span>Đang kiểm tra...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>⚡</span>
+                    <span>Kiểm tra kết nối</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Trạng thái kết nối Colab */}
+          {colabStatus && (
+            <div className={`text-xs p-3 rounded-xl border transition-all ${
+              colabStatus.connected
+                ? "bg-green-500/10 border-green-500/30 text-green-400"
+                : "bg-red-500/10 border-red-500/30 text-red-400"
+            }`}>
+              <div className="flex items-center gap-2 font-semibold">
+                <span className={`w-2.5 h-2.5 rounded-full ${colabStatus.connected ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
+                <span>{colabStatus.message}</span>
+              </div>
+              {colabStatus.connected && (
+                <div className="mt-2 text-[11px] grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-green-500/20 text-text-secondary">
+                  <div>GPU: <span className="text-white font-mono font-bold">{colabStatus.gpu_name}</span></div>
+                  <div>VRAM: <span className="text-white font-mono font-bold">{Math.round((colabStatus.vram_free_mb || 0) / 1024)}GB trống</span></div>
+                  <div>NVENC: <span className="text-green-400 font-bold">{colabStatus.nvenc_supported ? "Khả dụng (✓)" : "Không (✕)"}</span></div>
+                  <div>Độ trễ: <span className="text-neon-cyan font-mono font-bold">{colabStatus.latency_ms}ms</span></div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -43,6 +43,8 @@ class KeysUpdate(BaseModel):
     custom_ai_endpoint: str = "http://localhost:20128/v1"
     custom_ai_key: str = ""
     custom_ai_model: str = "kr/claude-sonnet-4.5"
+    use_colab_gpu: bool = False
+    colab_gpu_url: str = ""
 
 @router.get("/fonts")
 async def get_available_fonts():
@@ -294,7 +296,9 @@ async def get_keys():
         "default_vocal_volume": int(os.getenv("DEFAULT_VOCAL_VOLUME", 0)),
         "custom_ai_endpoint": os.getenv("CUSTOM_AI_ENDPOINT", "http://localhost:20128/v1"),
         "custom_ai_key": decrypt_data(os.getenv("CUSTOM_AI_KEY", "")),
-        "custom_ai_model": os.getenv("CUSTOM_AI_MODEL", "kr/claude-sonnet-4.5")
+        "custom_ai_model": os.getenv("CUSTOM_AI_MODEL", "kr/claude-sonnet-4.5"),
+        "use_colab_gpu": os.getenv("USE_COLAB_GPU", "False").lower() == "true",
+        "colab_gpu_url": os.getenv("COLAB_GPU_URL", "")
     }
 
 @router.post("/keys")
@@ -334,6 +338,8 @@ async def update_keys(data: KeysUpdate):
     set_key(ENV_PATH, "CUSTOM_AI_ENDPOINT", data.custom_ai_endpoint)
     set_key(ENV_PATH, "CUSTOM_AI_KEY", encrypt_data(data.custom_ai_key))
     set_key(ENV_PATH, "CUSTOM_AI_MODEL", data.custom_ai_model)
+    set_key(ENV_PATH, "USE_COLAB_GPU", str(data.use_colab_gpu))
+    set_key(ENV_PATH, "COLAB_GPU_URL", data.colab_gpu_url.strip().rstrip("/"))
     
     # Invalidate voices cache when TTS provider might have changed
     global _voices_cache
@@ -662,6 +668,46 @@ def check_gpu_status():
 @router.get("/gpu-status")
 async def get_gpu_status():
     return check_gpu_status()
+
+class ColabStatusCheckRequest(BaseModel):
+    url: str
+
+@router.post("/colab-status")
+async def check_colab_status(data: ColabStatusCheckRequest):
+    target_url = data.url.strip().rstrip("/")
+    if not target_url:
+        return {"connected": False, "message": "Chưa nhập Colab GPU URL."}
+    if not target_url.startswith("http"):
+        target_url = f"https://{target_url}"
+
+    import time
+    start = time.time()
+    try:
+        res = requests.get(f"{target_url}/api/gpu/health", timeout=8)
+        latency_ms = round((time.time() - start) * 1000, 1)
+        if res.status_code == 200:
+            resp_data = res.json()
+            gpu_info = resp_data.get("gpu", {})
+            return {
+                "connected": True,
+                "latency_ms": latency_ms,
+                "gpu_name": gpu_info.get("device_name", "Tesla T4"),
+                "vram_total_mb": gpu_info.get("vram_total_mb", 0),
+                "vram_free_mb": gpu_info.get("vram_free_mb", 0),
+                "nvenc_supported": gpu_info.get("nvenc_supported", True),
+                "cuda_version": gpu_info.get("cuda_version", "N/A"),
+                "message": f"Kết nối máy ảo Colab GPU thành công ({latency_ms}ms)!"
+            }
+        else:
+            return {
+                "connected": False,
+                "message": f"Máy chủ Colab trả về mã phản hồi HTTP {res.status_code}."
+            }
+    except requests.exceptions.Timeout:
+        return {"connected": False, "message": "Quá thời gian kết nối (Timeout 8s). Vui lòng kiểm tra lại notebook Colab."}
+    except Exception as e:
+        return {"connected": False, "message": f"Không thể kết nối tới Colab: {str(e)}"}
+
 
 
 _vieneu_instance = None

@@ -142,6 +142,14 @@ class TTSGenerator:
         return self._vieneu
 
     def _generate_vieneu_audio(self, text: str, voice: str, output_path: str, reference_audio: str = None):
+        from app.services.processor.colab_bridge import ColabBridge
+        if ColabBridge.is_enabled():
+            try:
+                ColabBridge.generate_tts(text=text, voice=voice, output_wav_path=output_path, reference_audio_path=reference_audio)
+                return
+            except Exception as e:
+                print(f"[!] Lỗi khi gọi Colab VieNeu TTS ({e}). Fallback về VieNeu local...")
+
         client = self._get_vieneu_client()
         from app.core.config import DATA_DIR
         

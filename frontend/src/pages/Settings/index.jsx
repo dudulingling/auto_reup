@@ -40,6 +40,10 @@ import ThemeTab from './components/ThemeTab';const Settings = () => {
   const [activeTab, setActiveTab] = useState("ai");
   const [gpuStatus, setGpuStatus] = useState(null);
   const [checkingGpu, setCheckingGpu] = useState(false);
+  const [useColabGpu, setUseColabGpu] = useState(false);
+  const [colabGpuUrl, setColabGpuUrl] = useState("");
+  const [colabStatus, setColabStatus] = useState(null);
+  const [checkingColab, setCheckingColab] = useState(false);
 
   const settingsTabs = [
     { id: "ai", label: "API & AI Keys" },
@@ -103,6 +107,8 @@ import ThemeTab from './components/ThemeTab';const Settings = () => {
         if (data.enable_diarization !== undefined) setEnableDiarization(data.enable_diarization);
         if (data.bgmVolume !== undefined) setBgmVolume(data.bgmVolume);
         if (data.default_vocal_volume !== undefined) setDefaultVocalVolume(data.default_vocal_volume);
+        if (data.use_colab_gpu !== undefined) setUseColabGpu(data.use_colab_gpu);
+        if (data.colab_gpu_url !== undefined) setColabGpuUrl(data.colab_gpu_url);
 
         // Tự động kiểm tra trạng thái ngay khi load trang nếu có dữ liệu
         if (data.fpt_ai_api_key || data.gemini_api_key || data.douyin_cookie || data.pexels_api_key) {
@@ -189,7 +195,9 @@ import ThemeTab from './components/ThemeTab';const Settings = () => {
           default_vocal_volume: Number(defaultVocalVolume),
           custom_ai_endpoint: customAiEndpoint,
           custom_ai_key: customAiKey,
-          custom_ai_model: customAiModel
+          custom_ai_model: customAiModel,
+          use_colab_gpu: useColabGpu,
+          colab_gpu_url: colabGpuUrl.trim()
         })
       });
       if (res.ok) {
@@ -281,6 +289,25 @@ import ThemeTab from './components/ThemeTab';const Settings = () => {
       }
     } catch (e) {
       setSaveStatus("Lỗi kết nối server!");
+    }
+  };
+
+  const handleCheckColab = async () => {
+    if (!colabGpuUrl?.trim()) return;
+    setCheckingColab(true);
+    setColabStatus(null);
+    try {
+      const res = await fetch('http://localhost:8000/api/settings/colab-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: colabGpuUrl.trim() })
+      });
+      const data = await res.json();
+      setColabStatus(data);
+    } catch (err) {
+      setColabStatus({ connected: false, message: `Lỗi kết nối: ${err.message}` });
+    } finally {
+      setCheckingColab(false);
     }
   };
 
@@ -392,6 +419,10 @@ import ThemeTab from './components/ThemeTab';const Settings = () => {
                 enableHealthCheck={enableHealthCheck} setEnableHealthCheck={setEnableHealthCheck}
                 healthCheckInterval={healthCheckInterval} setHealthCheckInterval={setHealthCheckInterval}
                 handleCheckNow={handleCheckNow}
+                useColabGpu={useColabGpu} setUseColabGpu={setUseColabGpu}
+                colabGpuUrl={colabGpuUrl} setColabGpuUrl={setColabGpuUrl}
+                colabStatus={colabStatus} checkingColab={checkingColab}
+                handleCheckColab={handleCheckColab}
               />
             )}
 

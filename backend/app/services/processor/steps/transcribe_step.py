@@ -51,21 +51,35 @@ class TranscribeStep(ProcessorStep):
                 if v_path: vocal_audio_path = v_path
                 if i_path: context['instrumental_audio_path'] = i_path
                 
-            if getattr(config, 'use_bcut_asr', False) or getattr(config, 'use_llm_segmentation', False):
-                use_bcut = getattr(config, 'use_bcut_asr', False)
-                use_llm = getattr(config, 'use_llm_segmentation', False)
-                whisper_prompt = getattr(config, 'whisper_prompt', None)
-                
-                log_callback(f"[*] Đang lấy word-level timestamps (Bcut={use_bcut})...\n")
-                words = transcriber.transcribe_to_words(vocal_audio_path, use_bcut=use_bcut, initial_prompt=whisper_prompt)
-                
-                from app.services.processor.subtitle_optimizer import SubtitleOptimizer
-                optimizer = SubtitleOptimizer()
-                optimizer.optimize_and_save_srt(words, orig_srt, use_llm=use_llm)
-            else:
-                whisper_prompt = getattr(config, 'whisper_prompt', None)
-                transcriber.transcribe(vocal_audio_path, orig_srt, initial_prompt=whisper_prompt)
-                
+            from app.services.processor.colab_bridge import ColabBridge
+            used_colab = False
+
+            if ColabBridge.is_enabled():
+                try:
+                    log_callback("[*] ☁️ Đang gửi audio sang Google Colab GPU (T4) để bóc tách Faster-Whisper...\n", progress=8.0)
+                    colab_res = ColabBridge.transcribe_whisper(vocal_audio_path)
+                    with open(orig_srt, "w", encoding="utf-8") as f:
+                        f.write(colab_res.get("srt_content", ""))
+                    log_callback(f"[+] ☁️ Colab T4 đã bóc tách xong phụ đề ({colab_res.get('duration', 0)}s)!\n", progress=15.0)
+                    used_colab = True
+                except Exception as colab_err:
+                    log_callback(f"[!] Cảnh báo Colab GPU: {colab_err}. Tự động chuyển sang Whisper Local...\n")
+
+            if not used_colab:
+                if getattr(config, 'use_bcut_asr', False) or getattr(config, 'use_llm_segmentation', False):
+                    use_bcut = getattr(config, 'use_bcut_asr', False)
+                    use_llm = getattr(config, 'use_llm_segmentation', False)
+                    whisper_prompt = getattr(config, 'whisper_prompt', None)
+                    
+                    log_callback(f"[*] Đang lấy word-level timestamps (Bcut={use_bcut})...\n")
+                    words = transcriber.transcribe_to_words(vocal_audio_path, use_bcut=use_bcut, initial_prompt=whisper_prompt)
+                    
+                    from app.services.processor.subtitle_optimizer import SubtitleOptimizer
+                    optimizer = SubtitleOptimizer()
+                    optimizer.optimize_and_save_srt(words, orig_srt, use_llm=use_llm)
+                else:
+                    whisper_prompt = getattr(config, 'whisper_prompt', None)
+                    transcriber.transcribe(vocal_audio_path, orig_srt, initial_prompt=whisper_prompt)
 
             record.srt_origin_path = orig_srt
             db.commit()
