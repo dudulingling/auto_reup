@@ -80,7 +80,8 @@ class ColabBridge:
             raise ValueError("Colab URL chưa được cấu hình.")
 
         url = f"{base_url}/api/gpu/tts"
-        data = {"text": text, "voice": voice}
+        voice_to_send = voice if voice and voice not in ["default", "female", "vieneu_female", "vieneu_default"] else "Trúc Ly"
+        data = {"text": text, "voice": voice_to_send}
         files = {}
 
         if reference_audio_path and os.path.exists(reference_audio_path):

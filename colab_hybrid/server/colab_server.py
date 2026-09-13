@@ -102,7 +102,7 @@ def transcribe_audio(
 @app.post("/api/gpu/tts")
 def generate_tts(
     text: str = Form(...),
-    voice: str = Form("female"),
+    voice: str = Form("Trúc Ly"),
     reference_file: Optional[UploadFile] = File(None),
 ):
     """

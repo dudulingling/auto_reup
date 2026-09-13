@@ -214,9 +214,15 @@ async def get_available_voices():
                 assets_path = Path(spec.origin).parent / "assets" / "voices_v3_turbo.json"
                 if assets_path.exists():
                     data = json.loads(assets_path.read_text(encoding="utf-8"))
-                    for name, v in data.get("presets", {}).items():
+                    presets_items = list(data.get("presets", {}).items())
+                    # Sort so Trúc Ly comes first as default
+                    presets_items.sort(key=lambda item: 0 if item[0] == "Trúc Ly" else 1)
+                    for name, v in presets_items:
                         desc = v.get("description", "")
+                        is_default = (name == "Trúc Ly")
                         label = f"{name} — {desc}" if desc else name
+                        if is_default:
+                            label += " (Mặc định)"
                         voices.append({
                             "id": f"vieneu_{name}",
                             "name": f"VieNeu: {label}",
@@ -230,9 +236,9 @@ async def get_available_voices():
             print(f"Error loading Vieneu presets JSON: {e}")
             # Fallback if library or file not found
             voices.extend([
-                {"id": "vieneu_female", "name": "VieNeu Nữ (Miền Nam/Bắc)", "provider": "VieNeu-TTS"},
+                {"id": "vieneu_female", "name": "VieNeu Nữ (Trúc Ly - Mặc định)", "provider": "VieNeu-TTS"},
                 {"id": "vieneu_male", "name": "VieNeu Nam (Miền Nam/Bắc)", "provider": "VieNeu-TTS"},
-                {"id": "vieneu_default", "name": "VieNeu Giọng Mặc Định", "provider": "VieNeu-TTS"}
+                {"id": "vieneu_default", "name": "VieNeu Giọng Mặc Định (Trúc Ly)", "provider": "VieNeu-TTS"}
             ])
         
         # Add cloned voices
@@ -717,6 +723,8 @@ def get_vieneu_client(emotion="natural"):
     if _vieneu_instance is None:
         from vieneu import Vieneu
         _vieneu_instance = Vieneu(emotion=emotion)
+        if hasattr(_vieneu_instance, "_default_voice"):
+            _vieneu_instance._default_voice = "Trúc Ly"
     return _vieneu_instance
 
 class VieneuTestRequest(BaseModel):
@@ -729,7 +737,14 @@ def get_vieneu_voices():
     try:
         tts = get_vieneu_client()
         presets = tts.list_preset_voices()
-        voices = [{"id": v_id, "name": desc} for desc, v_id in presets]
+        voices = []
+        for desc, v_id in presets:
+            is_default = (v_id == "Trúc Ly" or "Trúc Ly" in desc)
+            name_label = f"{desc} (Mặc định)" if is_default and "(Mặc định)" not in desc else desc
+            voices.append({"id": v_id, "name": name_label})
+
+        # Sort so Trúc Ly is listed first
+        voices.sort(key=lambda x: 0 if (x["id"] == "Trúc Ly" or "Trúc Ly" in x["name"]) else 1)
         
         # Add cloned voices
         clone_dir = os.path.join(DATA_DIR, "vieneu_clones")
@@ -764,9 +779,15 @@ def test_vieneu_tts(data: VieneuTestRequest):
                 except Exception as e:
                     print(f"Error encoding cloned voice: {e}")
                     raise Exception(f"Không thể giải mã file âm thanh mẫu: {str(e)}")
-        elif data.voice and data.voice != "default":
+        elif data.voice and data.voice not in ["default", "vieneu_default"]:
             try:
                 voice_data = tts.get_preset_voice(data.voice)
+            except Exception:
+                pass
+        else:
+            # Default voice is Trúc Ly
+            try:
+                voice_data = tts.get_preset_voice("Trúc Ly")
             except Exception:
                 pass
                 

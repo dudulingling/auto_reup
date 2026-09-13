@@ -133,6 +133,8 @@ class VieneuTTSGPUProcessor:
                 from vieneu import Vieneu
                 print("[*] Initializing Vieneu-TTS model on GPU...")
                 _vieneu_instance = Vieneu(emotion="natural")
+                if hasattr(_vieneu_instance, "_default_voice"):
+                    _vieneu_instance._default_voice = "Trúc Ly"
                 print("[+] Vieneu-TTS model loaded successfully!")
         return _vieneu_instance
 
@@ -140,11 +142,36 @@ class VieneuTTSGPUProcessor:
         client = self.get_client()
         os.makedirs(os.path.dirname(os.path.abspath(output_wav_path)), exist_ok=True)
 
+        if not voice or voice in ["default", "female"]:
+            voice = "Trúc Ly"
+
+        if hasattr(client, "_default_voice"):
+            client._default_voice = "Trúc Ly"
+
         # Generate audio using Vieneu
-        if reference_audio and os.path.exists(reference_audio):
-            client.clone_voice(text=text, reference_audio=reference_audio, output_path=output_wav_path)
+        if reference_audio and os.path.exists(reference_audio) and os.path.getsize(reference_audio) > 500:
+            try:
+                if hasattr(client, "clone_voice"):
+                    client.clone_voice(text=text, reference_audio=reference_audio, output_path=output_wav_path)
+                elif hasattr(client, "infer"):
+                    ref_codes = client.encode_reference(reference_audio) if hasattr(client, "encode_reference") else None
+                    audio = client.infer(text=text, ref_codes=ref_codes, voice=voice)
+                    client.save(audio, output_wav_path)
+                else:
+                    client.tts(text=text, voice=voice, output_path=output_wav_path)
+            except Exception as e:
+                print(f"[!] Lỗi khi clone giọng: {e}. Fallback trực tiếp về giọng {voice}...")
+                if hasattr(client, "infer"):
+                    audio = client.infer(text=text, voice=voice)
+                    client.save(audio, output_wav_path)
+                else:
+                    client.tts(text=text, voice=voice, output_path=output_wav_path)
         else:
-            client.tts(text=text, voice=voice, output_path=output_wav_path)
+            if hasattr(client, "infer"):
+                audio = client.infer(text=text, voice=voice)
+                client.save(audio, output_wav_path)
+            elif hasattr(client, "tts"):
+                client.tts(text=text, voice=voice, output_path=output_wav_path)
 
         return output_wav_path
 

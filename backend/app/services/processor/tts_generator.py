@@ -153,6 +153,8 @@ class TTSGenerator:
                         from vieneu import Vieneu
                         # Khởi tạo mô hình VieNeu-TTS
                         self._vieneu = Vieneu(emotion="natural")
+                        if hasattr(self._vieneu, "_default_voice"):
+                            self._vieneu._default_voice = "Trúc Ly"
                     except Exception as e:
                         raise Exception(f"Lỗi khởi tạo VieNeu-TTS (Vui lòng cài đặt eSpeak NG và pip install vieneu): {str(e)}")
         return self._vieneu
@@ -175,47 +177,66 @@ class TTSGenerator:
             clone_path = os.path.join(DATA_DIR, "vieneu_clones", filename)
             if os.path.exists(clone_path):
                 reference_audio = clone_path
-        
-        voice_data = None
-        # Zero-shot Voice Cloning (using reference audio)
-        if reference_audio and os.path.exists(reference_audio):
-            try:
-                voice_data = client.encode_reference(reference_audio)
-            except Exception as e:
-                print(f"Error encoding cloned voice reference {reference_audio}: {e}")
-                # Fallback to default presets if reference encoding fails
-                voice_data = None
-                
-        # If not a cloned voice or encoding failed, use preset voice
-        if voice_data is None and voice and voice != "default":
+
+        # 1. Xác định giọng cơ sở đích (Luôn ưu tiên Trúc Ly cho giọng nữ / mặc định)
+        target_voice_id = "Trúc Ly"
+        if voice == "male":
             try:
                 presets = client.list_preset_voices()
-                target_voice_id = None
-                
-                if voice == "male":
-                    for desc, v_id in presets:
-                        desc_lower = desc.lower()
-                        if "nam" in desc_lower or "male" in desc_lower:
-                            target_voice_id = v_id
-                            break
-                elif voice == "female":
-                    for desc, v_id in presets:
-                        desc_lower = desc.lower()
-                        if "nu" in desc_lower or "nữ" in desc_lower or "female" in desc_lower:
-                            target_voice_id = v_id
-                            break
-                elif not voice.startswith("clone_"):  # do not match clone_ prefix as preset
-                    target_voice_id = voice
-                    
-                if not target_voice_id and presets:
-                    target_voice_id = presets[0][1]
-                    
-                if target_voice_id:
-                    voice_data = client.get_preset_voice(target_voice_id)
+                for desc, v_id in presets:
+                    desc_lower = desc.lower()
+                    if "nam" in desc_lower or "male" in desc_lower:
+                        target_voice_id = v_id
+                        break
             except Exception:
-                voice_data = None
-                
-        audio = client.infer(text=text, voice=voice_data)
+                target_voice_id = "Trúc Ly"
+        elif voice and voice not in ["female", "default", ""] and not voice.startswith("clone_"):
+            target_voice_id = voice
+
+        # Đảm bảo _default_voice của client luôn trỏ về Trúc Ly
+        if hasattr(client, "_default_voice"):
+            client._default_voice = "Trúc Ly"
+
+        # Lấy dữ liệu preset của giọng đích
+        preset_voice_data = None
+        try:
+            preset_voice_data = client.get_preset_voice(target_voice_id)
+        except Exception:
+            try:
+                preset_voice_data = client.get_preset_voice("Trúc Ly")
+            except Exception:
+                preset_voice_data = None
+
+        # 2. Xử lý Voice Cloning (khi bật Auto Voice Clone hoặc dùng file âm thanh mẫu)
+        ref_codes = None
+        if reference_audio and os.path.exists(reference_audio):
+            try:
+                if os.path.getsize(reference_audio) > 500:
+                    ref_codes = client.encode_reference(reference_audio)
+            except Exception as e:
+                print(f"Error encoding cloned voice reference {reference_audio}: {e}")
+                ref_codes = None
+
+        # 3. Tiến hành sinh giọng nói:
+        # Dù bật Auto Voice Clone hay không, giọng đọc nền/fallback luôn ưu tiên Trúc Ly
+        if ref_codes is not None:
+            try:
+                audio = client.infer(text=text, ref_codes=ref_codes, voice=target_voice_id)
+            except TypeError:
+                try:
+                    tok = preset_voice_data.get("reserved_id") if isinstance(preset_voice_data, dict) else None
+                    audio = client.infer(text=text, voice={"codes": ref_codes, "reserved_id": tok})
+                except Exception:
+                    audio = client.infer(text=text, voice=preset_voice_data or target_voice_id)
+            except Exception as e:
+                print(f"[!] Lỗi khi infer clone audio ({e}). Fallback trực tiếp về giọng {target_voice_id}...")
+                audio = client.infer(text=text, voice=preset_voice_data or target_voice_id)
+        else:
+            try:
+                audio = client.infer(text=text, voice=target_voice_id)
+            except Exception:
+                audio = client.infer(text=text, voice=preset_voice_data)
+
         client.save(audio, output_path)
 
     @staticmethod
@@ -301,7 +322,7 @@ class TTSGenerator:
                 if active_tts == "fpt": local_voice_mode = "fpt_minhquang" if tag == "M" else "fpt_banmai"
                 elif active_tts == "openai": local_voice_mode = "openai_onyx" if tag == "M" else "openai_nova"
                 elif active_tts == "elevenlabs": local_voice_mode = "elevenlabs_drew" if tag == "M" else "elevenlabs_rachel"
-                elif active_tts == "vieneu": local_voice_mode = "vieneu_male" if tag == "M" else "vieneu_female"
+                elif active_tts == "vieneu": local_voice_mode = "vieneu_male" if tag == "M" else "vieneu_Trúc Ly"
                 else: local_voice_mode = "edge_namminh" if tag == "M" else "edge_hoaimy"
             
             is_vieneu = False
@@ -569,7 +590,7 @@ class TTSGenerator:
                 elif active_tts == "elevenlabs":
                     local_voice_mode = "elevenlabs_drew" if tag == "M" else "elevenlabs_rachel"
                 elif active_tts == "vieneu":
-                    local_voice_mode = "vieneu_male" if tag == "M" else "vieneu_female"
+                    local_voice_mode = "vieneu_male" if tag == "M" else "vieneu_Trúc Ly"
                 else:
                     local_voice_mode = "edge_namminh" if tag == "M" else "edge_hoaimy"
             

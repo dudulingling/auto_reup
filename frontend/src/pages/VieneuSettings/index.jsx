@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 
 const VieneuSettings = () => {
   const [voices, setVoices] = useState([]);
-  const [selectedVoice, setSelectedVoice] = useState('default');
+  const [selectedVoice, setSelectedVoice] = useState('Trúc Ly');
   const [emotion, setEmotion] = useState('natural');
   const [text, setText] = useState('Xin chào, đây là âm thanh chạy thử nghiệm của hệ thống lồng tiếng tự động VieNeu. Hệ thống đang hoạt động ổn định trên phần cứng của bạn.');
   const [loading, setLoading] = useState(false);
@@ -27,7 +27,8 @@ const VieneuSettings = () => {
       if (data.status === 'success') {
         setVoices(data.voices || []);
         if (data.voices && data.voices.length > 0) {
-          setSelectedVoice(data.voices[0].id);
+          const defaultVoice = data.voices.find(v => v.id === 'Trúc Ly' || v.id === 'vieneu_Trúc Ly' || (v.name && v.name.includes('Trúc Ly')));
+          setSelectedVoice(defaultVoice ? defaultVoice.id : data.voices[0].id);
         }
         setStatus({ loaded: true, error: null, message: 'Mô hình VieNeu-TTS đã tải và sẵn sàng hoạt động!' });
       } else {
@@ -322,7 +323,7 @@ const VieneuSettings = () => {
                     disabled={loading || voices.length === 0}
                   >
                     {voices.length === 0 ? (
-                      <option value="default">VieNeu Giọng Mặc Định</option>
+                      <option value="Trúc Ly">VieNeu Giọng Nữ Trúc Ly (Mặc định)</option>
                     ) : (
                       voices.map(voice => (
                         <option key={voice.id} value={voice.id}>{voice.name}</option>
