@@ -1,1 +1,0 @@
-﻿from app.db.session import SessionLocal; from app.models.history import VideoHistory; from app.models.upload_schedule import UploadSchedule; db = SessionLocal(); v = db.query(VideoHistory).filter(VideoHistory.original_name.like('%68358%')).first(); print(f'Status: {v.status}, Process_config: {v.process_config}') if v else print('Not found')

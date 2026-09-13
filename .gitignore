@@ -3,11 +3,16 @@
 .env.local
 .env.development
 .env.production
+backend/.env
 
-# Node
+# Node & Frontend
 node_modules/
-npm-debug.log
-yarn-error.log
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*build_output.txt
+*lint_output.txt
 
 # Python
 __pycache__/
@@ -16,38 +21,47 @@ __pycache__/
 venv/
 env/
 .venv/
+backend/.venv/
 
-# Data & Media (Không push video và database lên GitHub)
+# Data & Database (Không push dữ liệu, video và database lên GitHub)
 data/
 *.sqlite
 *.db
 
-# OS Files
+# Backups & Archives
+backups/
+*.zip
+*.tar.gz
+*.rar
+
+# OS & Editor Files
 .DS_Store
 Thumbs.db
-
-# IDEs
 .vscode/
 .idea/
 
-# Logs
-logs/
+# Logs (Giữ thư mục logs/ qua .gitkeep nhưng không push file logs)
+logs/*
+!logs/.gitkeep
 *.log
 
 # Celery
 celerybeat-schedule*
 
-# Temp & Audio test files
+# Temp & Audio/Video test files
 *.mp3
+*.wav
+*.mp4
+debug_*.txt
 scratch/
 
-# Executables and installers
+# Executables & Installers
 *.msi
+*.exe
 
-# Local agent session data and temp data
-local_agent/
+# Local Agent session & temp
 local_agent/user_session_data/
+local_agent/node_modules/
 
-# Build and version artifacts
+# Build artifacts
 backend/1.0.6
-

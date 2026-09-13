@@ -43,14 +43,22 @@ class TranscribeStep(ProcessorStep):
             db.commit()
             
             extract_audio(video_path, audio_tmp)
+            if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
+                raise Exception("Tiến trình bị hủy bởi người dùng.")
+
             use_demucs = os.getenv("ENABLE_DEMUCS", "False").lower() == "true"
             
             vocal_audio_path = audio_tmp
             if use_demucs:
+                if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
+                    raise Exception("Tiến trình bị hủy bởi người dùng.")
                 v_path, i_path = separate_audio_with_ai(audio_tmp, audio_dir, log_callback)
                 if v_path: vocal_audio_path = v_path
                 if i_path: context['instrumental_audio_path'] = i_path
                 
+            if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
+                raise Exception("Tiến trình bị hủy bởi người dùng.")
+
             from app.services.processor.colab_bridge import ColabBridge
             used_colab = False
 

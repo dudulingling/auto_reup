@@ -19,7 +19,7 @@ export const BulkConfigModal = ({ hook }) => {
   const [aspectRatio, setAspectRatio] = useState(null);
   
   const videoPath = processingItems && processingItems.length > 0 ? processingItems[0] : null;
-  const { ffmpegPreviewUrl, isGeneratingPreview } = useFfmpegPreview(subtitleConfig, videoPath);
+  const { ffmpegPreviewUrl, isGeneratingPreview } = useFfmpegPreview(subtitleConfig, videoPath, previewTime);
 
   if (!showConfigModal) return null;
 

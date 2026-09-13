@@ -216,25 +216,10 @@ export const useScheduleData = () => {
     }
   };
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    if (selectedVideos.length === 0) return toast.error("Chưa chọn Video nào!");
-    if (selectedAccounts.length === 0) return toast.error("Chưa chọn Tài khoản MXH!");
-    if (scheduleMode === "timer" && !scheduledTime) return toast.error("Vui lòng chọn thời gian hẹn giờ!");
-    
-    // Check duplicates
-    for (let vidId of selectedVideos) {
-      for (let accId of selectedAccounts) {
-        if (postedMap[String(vidId)] && postedMap[String(vidId)].has(String(accId))) {
-          const v = videos.find(v => String(v.id) === String(vidId));
-          const a = accounts.find(a => String(a.id) === String(accId));
-          const vName = v ? truncateFilename(v.original_name || v.raw_video_path) : `Video #${vidId}`;
-          const aName = a ? a.username : `Tài khoản #${accId}`;
-          return toast.error(`Cảnh báo: ${vName} đã được lên lịch/đăng trên tài khoản ${aName}. Vui lòng bỏ chọn để tránh trùng lặp!`);
-        }
-      }
-    }
-    
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateWarnings, setDuplicateWarnings] = useState([]);
+
+  const executeSubmit = async (allowDuplicate = false) => {
     let timeToPost = null;
     if (scheduleMode === "timer") {
       timeToPost = new Date(scheduledTime).toISOString();
@@ -269,7 +254,8 @@ export const useScheduleData = () => {
               caption: finalCaption,
               hashtags: finalHashtags,
               scheduled_time: timeToPost,
-              engine_type: engineType
+              engine_type: engineType,
+              allow_duplicate: allowDuplicate
             })
           });
           
@@ -287,6 +273,8 @@ export const useScheduleData = () => {
       setCaption("");
       setHashtags("#xuhuong #trending");
       setScheduledTime("");
+      setShowDuplicateModal(false);
+      setDuplicateWarnings([]);
       fetchData();
     } catch (error) {
       console.error(error);
@@ -294,6 +282,49 @@ export const useScheduleData = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const onSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (selectedVideos.length === 0) return toast.error("Chưa chọn Video nào!");
+    if (selectedAccounts.length === 0) return toast.error("Chưa chọn Tài khoản MXH!");
+    if (scheduleMode === "timer" && !scheduledTime) return toast.error("Vui lòng chọn thời gian hẹn giờ!");
+    
+    // Check duplicates
+    const duplicates = [];
+    for (let vidId of selectedVideos) {
+      for (let accId of selectedAccounts) {
+        if (postedMap[String(vidId)] && postedMap[String(vidId)].has(String(accId))) {
+          const v = videos.find(v => String(v.id) === String(vidId));
+          const a = accounts.find(a => String(a.id) === String(accId));
+          const vName = v ? (v.original_name || truncateFilename(v.raw_video_path)) : `Video #${vidId}`;
+          const aName = a ? a.username : `Tài khoản #${accId}`;
+          duplicates.push({
+            videoId: vidId,
+            accountId: accId,
+            videoName: vName,
+            accountName: aName
+          });
+        }
+      }
+    }
+
+    if (duplicates.length > 0) {
+      setDuplicateWarnings(duplicates);
+      setShowDuplicateModal(true);
+      return;
+    }
+
+    await executeSubmit(false);
+  };
+
+  const handleConfirmDuplicateSubmit = async () => {
+    await executeSubmit(true);
+  };
+
+  const handleCloseDuplicateModal = () => {
+    setShowDuplicateModal(false);
+    setDuplicateWarnings([]);
   };
 
   const executeDeleteSchedule = async (id) => {
@@ -400,6 +431,7 @@ export const useScheduleData = () => {
     scheduleMode, setScheduleMode, scheduledTime, setScheduledTime, engineType, setEngineType,
     isGenerating, isTranslating, isSubmitting, groupedVideos, postedMap,
     handleAccountToggle, handleVideoToggle, toggleAllAuthorVideos, generateAIContent, translateOriginalCaption,
-    onSubmit, deleteSchedule, handleRetry, handlePause, handleResume, handleStop, fetchData
+    onSubmit, deleteSchedule, handleRetry, handlePause, handleResume, handleStop, fetchData,
+    showDuplicateModal, setShowDuplicateModal, duplicateWarnings, handleConfirmDuplicateSubmit, handleCloseDuplicateModal
   };
 };

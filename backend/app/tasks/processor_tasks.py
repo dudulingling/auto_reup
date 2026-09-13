@@ -182,7 +182,25 @@ def process_video_task(
         )
 
         def process_single(vp):
+            base_name = os.path.basename(vp).split('.')[0]
             try:
+                # 1. Kiểm tra nhanh cờ dừng từ Redis
+                pause_flag = redis_client.get(f"pause_video_{base_name}")
+                if pause_flag in (b"1", "1"):
+                    log_callback(f"[System] Video {base_name} đã nhận cờ Dừng trước đó. Bỏ qua.\n")
+                    logger.info(f"Video {base_name} có cờ pause_video=1, bỏ qua.")
+                    return
+
+                # 2. Kiểm tra trạng thái DB để chặn triệt để task tồn dư khi restart server
+                from app.db.session import get_db_session
+                from app.models.history import VideoHistory, ProcessStatus
+                with get_db_session() as db:
+                    record = db.query(VideoHistory).filter(VideoHistory.raw_video_path.like(f"%{base_name}%")).first()
+                    if record and record.status in [ProcessStatus.PAUSED, ProcessStatus.FAILED, ProcessStatus.COMPLETED]:
+                        log_callback(f"[System] Video {base_name} đang ở trạng thái '{record.status}'. Hủy xử lý task tồn dư.\n")
+                        logger.info(f"Video {base_name} đang có status '{record.status}' trong DB, bỏ qua task Celery.")
+                        return
+
                 # If random combo is enabled, create a unique config per video
                 video_config = config
                 if opt_random_combo:
@@ -202,11 +220,17 @@ def process_video_task(
                     log_callback(f"[Random] {os.path.basename(vp)}: {', '.join(enabled) if enabled else 'none'}\n")
                 pipeline.process_video(vp, log_callback, video_config)
             except Exception as e:
+                error_msg = str(e)
+                if "bị hủy bởi người dùng" in error_msg:
+                    log_callback(f"[*] Tiến trình xử lý cho {base_name} đã dừng theo yêu cầu của người dùng.\n")
+                    logger.info(f"Tiến trình xử lý {base_name} đã dừng do người dùng hủy.")
+                    return
+
                 logger.error(f"Lỗi khi xử lý {vp}: {e}")
 
                 # Classify OOM / Resource errors for retry
-                error_msg = str(e).lower()
-                if any(kw in error_msg for kw in ("memory", "resource", "os error", "killed")):
+                err_lower = error_msg.lower()
+                if any(kw in err_lower for kw in ("memory", "resource", "os error", "killed")):
                     log_callback(f"[!] Lỗi tài nguyên hệ thống khi xử lý {vp}: {e}. Retry...\n")
                     raise  # Re-raise for outer retry
                 else:

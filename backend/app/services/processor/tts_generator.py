@@ -61,15 +61,31 @@ class TTSGenerator:
         import asyncio
         max_retries = 5
         for attempt in range(max_retries):
+            # Clean up residual/empty file if any before attempt
+            if os.path.exists(output_path):
+                try:
+                    os.remove(output_path)
+                except Exception:
+                    pass
+
             try:
                 communicate = edge_tts.Communicate(text, voice, rate=rate)
                 await communicate.save(output_path)
+                if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                    raise Exception("Audio file rỗng hoặc không tải về được.")
                 return
             except Exception as e:
+                if os.path.exists(output_path):
+                    try:
+                        os.remove(output_path)
+                    except Exception:
+                        pass
+
                 if log_callback:
                     log_callback(f"[*] Gặp sự cố kết nối với Microsoft TTS (Lần thử {attempt + 1}/{max_retries}): {e}. Đang thử lại...\n")
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(1 + attempt * 1.5 + random.uniform(0, 1))
+                    sleep_time = 1.0 + attempt * 1.5 + random.uniform(0.2, 0.6)
+                    await asyncio.sleep(sleep_time)
                     continue
                 raise e
 
@@ -321,8 +337,13 @@ class TTSGenerator:
                     elif is_openai: self._generate_openai_audio(tts_text, voice_to_use, clip_path)
                     elif is_elevenlabs: self._generate_elevenlabs_audio(tts_text, voice_to_use, clip_path)
                     else:
+                        import time
                         import asyncio
+                        stagger = (i % 3) * 0.2
+                        if stagger > 0:
+                            time.sleep(stagger)
                         asyncio.run(self._generate_edge_audio(tts_text, voice_to_use, clip_path, rate=rate, log_callback=log_callback))
+                        time.sleep(0.15)
                         
                     subprocess.run([
                         imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", clip_path, clip_wav_path
@@ -600,12 +621,13 @@ class TTSGenerator:
                     elif is_elevenlabs:
                         self._generate_elevenlabs_audio(tts_text, voice_to_use, clip_path)
                     else:
+                        import time
                         import asyncio
+                        stagger = (i % 3) * 0.2
+                        if stagger > 0:
+                            time.sleep(stagger)
                         asyncio.run(self._generate_edge_audio(tts_text, voice_to_use, clip_path, rate=rate, log_callback=log_callback))
-                        
-                    import time
-                    if "edge" in local_voice_mode:
-                        time.sleep(0.2)
+                        time.sleep(0.15)
                         
                     subprocess.run([
                         imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", clip_path, clip_wav_path

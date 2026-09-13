@@ -84,6 +84,9 @@ class TranslateAndTTSStep(ProcessorStep):
             
         log_callback(f"[*] Bước 2: Dịch thuật tiếng Trung -> Việt bằng Gemini...\n", progress=15.0)
         try:
+            if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
+                raise Exception("Tiến trình bị hủy bởi người dùng.")
+
             record.status = ProcessStatus.TRANSLATING
             db.commit()
             extract_audio(video_path, audio_tmp)
@@ -120,6 +123,8 @@ class TranslateAndTTSStep(ProcessorStep):
                 tts_thread.start()
                 
             def on_chunk(chunk_text):
+                if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
+                    raise Exception("Tiến trình bị hủy bởi người dùng.")
                 if tts_thread:
                     tts_queue.put(chunk_text)
         

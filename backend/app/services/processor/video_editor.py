@@ -1,6 +1,16 @@
 import os
+import sys
 import subprocess
 import imageio_ffmpeg
+
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 from dotenv import load_dotenv
 
@@ -254,15 +264,21 @@ class VideoEditor:
         ])
 
         if vcodec == "h264_nvenc":
-            # h264_nvenc không hỗ trợ -crf và sử dụng bộ preset riêng (slow, medium, fast)
+            # NVENC GPU: Bitrate mục tiêu 5 Mbps, tối đa 8 Mbps, cq 23 giúp giữ nguyên độ sắc nét Full HD cho TikTok
             cmd.extend([
-                "-preset", "fast",
+                "-preset", "medium",
+                "-rc:v", "vbr",
+                "-cq:v", "23",
+                "-b:v", "5M",
+                "-maxrate", "8M",
+                "-bufsize", "10M",
                 "-pix_fmt", "yuv420p"
             ])
         else:
+            # CPU Fallback: CRF 22 với veryfast preset để tối ưu cân bằng giữa tốc độ và độ sắc nét
             cmd.extend([
-                "-crf", "23",
-                "-preset", "ultrafast",
+                "-crf", "22",
+                "-preset", "veryfast",
                 "-pix_fmt", "yuv420p"
             ])
         
@@ -353,9 +369,9 @@ class VideoEditor:
                 except Exception:
                     pass
 
-    def generate_preview_frame(self, input_video: str, preview_text: str, config=None) -> str:
+    def generate_preview_frame(self, input_video: str, preview_text: str, config=None, preview_time: float = 1.0) -> str:
         """
-        Extracts a single frame from the input_video at a specific timestamp (e.g. 1 second in),
+        Extracts a single frame from the input_video at a specific timestamp (preview_time seconds in),
         applies the EXACT same video filters, subtitles, and watermarks as `burn_subtitles`,
         and returns the absolute path to a generated JPG image file.
         """
@@ -393,7 +409,9 @@ class VideoEditor:
         output_image = os.path.join(tempfile.gettempdir(), f"preview_{uuid.uuid4().hex}.jpg")
         video_w, video_h = get_video_resolution(input_video)
         
-        cmd = [ffmpeg_exe, "-y", "-ss", "00:00:01"]
+        # Chụp tại đúng thời điểm preview_time (giây)
+        ss_time = max(0.0, float(preview_time))
+        cmd = [ffmpeg_exe, "-y", "-ss", f"{ss_time:.2f}"]
         cmd.extend(["-i", input_video])
         input_count = 1
         

@@ -173,10 +173,22 @@ class GpmWarmupEngine(BaseWarmupEngine):
                 except Exception:
                     pass
 
-            # Ngẫu nhiên dừng lại xem video từ 10s đến 45s
+            # Ngẫu nhiên dừng lại xem video từ 10s đến 45s (kiểm tra ngắt nhịp mỗi 0.5s)
             watch_time = random.randint(10, 45)
             logger.info(f"[Warmup-GPM] Đang xem video {videos_watched + 1} trong {watch_time}s...")
-            time.sleep(watch_time)
+            stopped_early = False
+            elapsed_w = 0.0
+            while elapsed_w < watch_time:
+                if r and account_id and r.get(f"warmup_stop:{account_id}"):
+                    logger.info("[Warmup-GPM] Nhận được tín hiệu dừng nuôi từ hệ thống.")
+                    r.delete(f"warmup_stop:{account_id}")
+                    stopped_early = True
+                    break
+                time.sleep(0.5)
+                elapsed_w += 0.5
+
+            if stopped_early:
+                break
             
             # Ngẫu nhiên thả tim (Tỷ lệ 15%) bằng double-click
             if random.random() < 0.15:
@@ -345,6 +357,29 @@ class AdbWarmupEngine(BaseWarmupEngine):
         if not is_online:
             raise Exception(f"Thiết bị {device_id} đang offline hoặc chưa kết nối ADB. Không thể nuôi tài khoản.")
             
+        account_id = self.account_data.get("id")
+        try:
+            from app.core.redis_pool import get_sync_redis
+            r = get_sync_redis(decode_responses=True)
+        except Exception:
+            r = None
+
+        def _check_adb_stop() -> bool:
+            if r and account_id:
+                try:
+                    if r.get(f"warmup_stop:{account_id}") in ("1", b"1", 1):
+                        logger.info(f"[Warmup-ADB] Nhận được tín hiệu dừng nuôi từ hệ thống cho account #{account_id}.")
+                        r.delete(f"warmup_stop:{account_id}")
+                        subprocess.run(f"adb -s {device_id} shell input keyevent 3", shell=True)
+                        return True
+                except Exception:
+                    pass
+            return False
+
+        if _check_adb_stop():
+            logger.info("[Warmup-ADB] Đã có cờ dừng nuôi từ trước. Hủy tác vụ ngay lập tức.")
+            return
+
         adb_cmd = ["adb", "-s", device_id]
         
         logger.info(f"[Warmup-ADB] Khởi động Tiktok trên thiết bị {device_id}")
@@ -352,24 +387,35 @@ class AdbWarmupEngine(BaseWarmupEngine):
         packages = ["com.zhiliaoapp.musically", "com.ss.android.ugc.trill", "com.ss.android.ugc.aweme"]
         app_launched = False
         
+        launched_pkg = None
         for pkg in packages:
+            if _check_adb_stop():
+                return
             res = subprocess.run(adb_cmd + ["shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"], capture_output=True, text=True, encoding='utf-8', errors='replace')
             output = res.stdout + res.stderr
             if "No activities found to run" not in output and "error:" not in output and "device offline" not in output and "not found" not in output:
                 logger.info(f"[Warmup-ADB] Đã gửi lệnh khởi chạy package {pkg}")
                 app_launched = True
+                launched_pkg = pkg
                 break
                 
         if not app_launched:
             raise Exception("Lỗi: Không thể khởi chạy Tiktok (Chưa cài đặt app, sai IP hoặc bị HĐH chặn lệnh monkey).")
             
-        time.sleep(10) # Đợi app load
+        # Đợi app load với khả năng ngắt quãng
+        for _ in range(20):
+            if _check_adb_stop():
+                return
+            time.sleep(0.5)
         
         # Xác minh app có thực sự đang mở trên màn hình hay không
         try:
+            if _check_adb_stop():
+                return
             from app.services.uploader.adb_automator import ADBAutomator
             automator = ADBAutomator(device_id)
-            if not automator.wait_for_app_foreground([tiktok_pkg], timeout=60):
+            target_pkgs = [launched_pkg] if launched_pkg else packages
+            if not automator.wait_for_app_foreground(target_pkgs, timeout=60):
                 raise Exception("Lỗi: Tiktok tải quá chậm, bị treo, hoặc lệnh monkey bị HĐH chặn (Cần bật Gỡ lỗi USB bảo mật).")
             time.sleep(5) # Chờ 5s cho UI ổn định và tải xong video đầu tiên
         except Exception as e:
@@ -399,12 +445,32 @@ class AdbWarmupEngine(BaseWarmupEngine):
                 pass
         
         logger.info(f"[Warmup-ADB] Kích thước màn hình: {width}x{height}")
-        
+
         while time.time() < end_time:
+            if _check_adb_stop():
+                logger.info("[Warmup-ADB] Dừng tiến trình nuôi tài khoản theo lệnh của người dùng.")
+                break
+
             watch_time = random.randint(10, 20)
             logger.info(f"[Warmup-ADB] Đang xem video {videos_watched + 1} trong {watch_time}s...")
-            time.sleep(watch_time)
             
+            # Kiểm tra cờ dừng ngắt nhịp mỗi 0.5s thay vì ngủ liền 20s
+            stopped_early = False
+            elapsed_w = 0.0
+            while elapsed_w < watch_time:
+                if _check_adb_stop():
+                    logger.info("[Warmup-ADB] Dừng tiến trình nuôi tài khoản theo lệnh của người dùng.")
+                    stopped_early = True
+                    break
+                time.sleep(0.5)
+                elapsed_w += 0.5
+
+            if stopped_early:
+                break
+            
+            if _check_adb_stop():
+                break
+
             # Tỷ lệ thả tim 15%
             if random.random() < 0.15:
                 logger.info(f"[Warmup-ADB] Tìm và bấm thả tim video...")
@@ -421,6 +487,9 @@ class AdbWarmupEngine(BaseWarmupEngine):
                 except Exception as e:
                     logger.error(f"[Warmup-ADB] Lỗi khi cố gắng thả tim: {e}")
                     
+            if _check_adb_stop():
+                break
+
             # Tỷ lệ yêu thích 15%
             if random.random() < 0.15:
                 logger.info(f"[Warmup-ADB] Tìm và bấm yêu thích video...")

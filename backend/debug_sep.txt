@@ -1,3 +1,0 @@
-v_path: E:\Tradingbot\auto_reup_tiktok\backend\data\test_out\final_vocals_6cadd16e.wav
-i_path: E:\Tradingbot\auto_reup_tiktok\backend\data\test_out\final_instrumental_6cadd16e.wav
-v_path size: 44

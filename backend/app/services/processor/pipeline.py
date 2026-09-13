@@ -169,15 +169,20 @@ class ProcessorPipeline:
             ]
 
             for step in steps:
+                if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
+                    log_callback(f"[*] Tiến trình đã được tạm dừng bởi người dùng.\n")
+                    record.status = ProcessStatus.PAUSED
+                    db.commit()
+                    return
                 if not step.execute(context):
                     break
                     
         except Exception as e:
             import traceback
             traceback.print_exc()
-            is_canceled = "bị hủy bởi người dùng" in str(e) or sync_redis.get(f"pause_video_{base_name}") == "1"
+            is_canceled = "bị hủy bởi người dùng" in str(e) or sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1)
             record.status = ProcessStatus.PAUSED if is_canceled else ProcessStatus.FAILED
-            record.error_message = clean_error_message(f"Pipeline Error: {str(e)}")
+            record.error_message = clean_error_message(f"Pipeline Error: {str(e)}") if not is_canceled else None
             db.commit()
             if is_canceled:
                 log_callback(f"[*] Tiến trình đã được tạm dừng bởi người dùng.\n")

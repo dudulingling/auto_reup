@@ -2,6 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+import sys
+
+# Ensure UTF-8 output on Windows consoles to prevent UnicodeEncodeError on Chinese/emojis
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # --- PYTORCH 2.3.1 POLYFILL: nn.RMSNorm (added in PyTorch 2.4) ---
 # Required by VieNeu TTS model on legacy GPU (GTX 1050 / sm_61)

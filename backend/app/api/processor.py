@@ -84,6 +84,7 @@ class ProcessRequest(BaseModel):
 class PreviewRequest(ProcessRequest):
     preview_text: str = "Đây là phụ đề mẫu tự động sinh..."
     video_path: Optional[str] = None
+    preview_time: float = 1.0
 
 
 @router.post("/upload-logo")
@@ -199,7 +200,8 @@ async def preview_subtitle(request: PreviewRequest):
         output_img = editor.generate_preview_frame(
             input_video=vp_clean,
             preview_text=request.preview_text,
-            config=config
+            config=config,
+            preview_time=request.preview_time
         )
         
         # Return image and delete temp file in background
@@ -358,6 +360,8 @@ async def start_processor(request: ProcessRequest):
     try:
         base_names = [os.path.basename(vp).split('.')[0] for vp in cleaned_paths]
         await redis_client.set(f"task_videos_{task.id}", json.dumps(base_names), ex=86400)
+        for bn in base_names:
+            await redis_client.set(f"video_task_{bn}", task.id, ex=86400)
     except Exception as e:
         logger.error(f"Lỗi khi lưu task videos mapping vào Redis: {e}")
 
@@ -395,6 +399,17 @@ async def pause_processor(request: PauseRequest):
     base_name = os.path.basename(vp_clean).split('.')[0]
     await redis_client.set(f"pause_video_{base_name}", "1")
     logger.info(f"Đã đặt cờ Pause cho video: {base_name}")
+
+    # Thu hồi Celery task nếu có
+    try:
+        task_id = await redis_client.get(f"video_task_{base_name}")
+        if task_id:
+            task_id_str = task_id.decode('utf-8') if isinstance(task_id, bytes) else str(task_id)
+            from app.core.celery_app import celery_app
+            celery_app.control.revoke(task_id_str, terminate=False)
+            logger.info(f"Đã gửi lệnh revoke Celery task {task_id_str} cho video {base_name}")
+    except Exception as rev_err:
+        logger.warning(f"Không thể revoke Celery task cho {base_name}: {rev_err}")
 
     # Update DB to PAUSED for immediate UI feedback
     try:

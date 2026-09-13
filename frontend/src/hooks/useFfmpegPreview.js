@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export const useFfmpegPreview = (subtitleConfig, videoPath) => {
+export const useFfmpegPreview = (subtitleConfig, videoPath, previewTime = 1) => {
   const [ffmpegPreviewUrl, setFfmpegPreviewUrl] = useState(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
 
@@ -18,6 +18,7 @@ export const useFfmpegPreview = (subtitleConfig, videoPath) => {
         const payload = {
           video_paths: [videoPath],
           video_path: videoPath,
+          preview_time: Number(previewTime) || 1,
           preview_text: configObj.previewSubtitleText,
           voice_mode: configObj.voice,
           bg_volume: configObj.volume,
@@ -85,7 +86,7 @@ export const useFfmpegPreview = (subtitleConfig, videoPath) => {
     subtitleConfig.watermarkSize, subtitleConfig.watermarkColor, subtitleConfig.watermarkOpacity, 
     subtitleConfig.enableSubtitles, subtitleConfig.maskEnabled, subtitleConfig.masks,
     subtitleConfig.isDragging, subtitleConfig.isDraggingWatermark,
-    videoPath
+    videoPath, previewTime
   ]);
 
   return { ffmpegPreviewUrl, isGeneratingPreview };

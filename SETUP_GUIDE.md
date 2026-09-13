@@ -99,6 +99,9 @@ cd backend
 
 *(Lưu ý: Trên Windows, bắt buộc phải dùng cờ `--pool=solo` cho Celery để tránh các lỗi đa tiến trình).*
 
+> [!TIP]
+> **Khởi chạy nhanh 1-Click**: Tại thư mục gốc của dự án, bạn chỉ cần click đúp vào file `start_backend.bat` để hệ thống tự động khởi chạy cả Uvicorn API Server và Celery Worker trong nền. Toàn bộ nhật ký hoạt động sẽ được tự động ghi lại tại thư mục `logs/` (`logs/bot.log` và `logs/celery.log`).
+
 ---
 
 ## 🎉 BƯỚC 5: Truy Cập Giao Diện

@@ -2,7 +2,7 @@ import os
 import sys
 
 # Thêm đường dẫn project vào sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "backend")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.services.crawler.douyin_api import DouyinAPIClient
 import httpx

@@ -61,6 +61,21 @@ def execute_upload(self, schedule_id: int):
             logger.warning(f"Schedule {schedule_id} not found, skipping.")
             return
 
+        # 1. Chặn thực thi task tồn dư nếu schedule đã bị hủy, dừng hoặc hoàn thành
+        if schedule.status in ["failed", "paused", "success"]:
+            logger.info(f"[System] Schedule #{schedule_id} đang ở trạng thái '{schedule.status}'. Hủy thực thi task đăng bài tồn dư.")
+            return
+
+        # 2. Kiểm tra tín hiệu Redis STOP trước khi thực thi
+        try:
+            from app.core.redis_pool import get_sync_redis
+            r = get_sync_redis(decode_responses=True)
+            if r.get(f"task_control:{schedule_id}") == "stop":
+                logger.info(f"[System] Schedule #{schedule_id} đã nhận cờ STOP từ trước. Hủy task.")
+                return
+        except Exception:
+            pass
+
         try:
             video_history = schedule.history
             account = schedule.account
@@ -243,8 +258,20 @@ def warmup_account_task(self, account_data: dict):
     with get_db_session() as db:
         # Mark as warming up
         if account_id:
+            from app.core.redis_pool import get_sync_redis
+            try:
+                r = get_sync_redis(decode_responses=True)
+                if r.get(f"warmup_stop:{account_id}"):
+                    logger.info(f"Tài khoản {account_id} có cờ warmup_stop, hủy task warmup tồn dư.")
+                    r.delete(f"warmup_stop:{account_id}")
+                    return
+            except Exception:
+                pass
+
             acc = db.query(SocialAccount).filter_by(id=account_id).first()
             if acc:
+                if acc.status != "warming_up" and acc.status != "active":
+                    pass
                 acc.status = "warming_up"
                 db.commit()
 

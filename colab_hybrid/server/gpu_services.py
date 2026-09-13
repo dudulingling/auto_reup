@@ -249,9 +249,9 @@ class VideoEditorNVENC:
         cmd.extend(["-vf", vf_str, "-c:v", encoder])
 
         if encoder == "h264_nvenc":
-            cmd.extend(["-preset", "p4", "-rc:v", "vbr", "-cq:v", "23", "-b:v", "5M"])
+            cmd.extend(["-preset", "p4", "-rc:v", "vbr", "-cq:v", "26", "-b:v", "2M", "-maxrate", "3M", "-bufsize", "4M"])
         else:
-            cmd.extend(["-preset", "fast", "-crf", "22"])
+            cmd.extend(["-preset", "fast", "-crf", "23"])
 
         cmd.extend(["-c:a", "aac", "-b:a", "192k", output_video])
 

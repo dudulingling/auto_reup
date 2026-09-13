@@ -20,7 +20,15 @@ class Transcriber:
         load_dotenv(ENV_PATH, override=True)
         self.use_groq = os.getenv("USE_GROQ", "False").lower() == "true"
         self.groq_api_key = decrypt_data(os.getenv("GROQ_API_KEY", ""))
-        self.use_gpu = os.getenv("USE_GPU_ACCELERATION", "False").lower() == "true"
+        use_gpu_env = os.getenv("USE_GPU_ACCELERATION")
+        if use_gpu_env is not None:
+            self.use_gpu = use_gpu_env.lower() == "true"
+        else:
+            try:
+                import torch
+                self.use_gpu = torch.cuda.is_available()
+            except Exception:
+                self.use_gpu = False
         self.model_size = model_size
         
         if self.use_groq and not self.groq_api_key:

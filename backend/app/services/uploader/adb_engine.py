@@ -4,6 +4,7 @@ import subprocess
 import time
 import random
 import re
+import uuid
 from datetime import datetime
 from typing import Dict, Any
 from .base_engine import BaseUploaderEngine, TaskAbortedByUser
@@ -75,8 +76,26 @@ class ADBUploader(BaseUploaderEngine):
             time.sleep(interval)
             elapsed += interval
 
+    def _check_abort(self):
+        """Kiểm tra ngay lập tức xem task có bị người dùng hủy không"""
+        if not self.schedule_id:
+            return
+        try:
+            from app.core.redis_pool import get_sync_redis
+            r = get_sync_redis(decode_responses=True)
+            signal = r.get(f"task_control:{self.schedule_id}")
+            if signal == "stop":
+                logger.warning(f"[ADB] Nhận tín hiệu STOP từ người dùng cho schedule #{self.schedule_id}!")
+                self._run_adb_cmd(["shell", "input", "keyevent", "3"])
+                raise TaskAbortedByUser(f"Bị hủy bởi người dùng (schedule_id={self.schedule_id})")
+        except TaskAbortedByUser:
+            raise
+        except Exception:
+            pass
+
     def _run_adb_cmd(self, args: list, timeout: int = 60) -> str:
         """Chạy lệnh adb tới thiết bị cụ thể"""
+        self._check_abort()
         cmd = ["adb", "-s", self.adb_ip] + args
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, encoding='utf-8', errors='replace')
@@ -92,6 +111,7 @@ class ADBUploader(BaseUploaderEngine):
 
     def connect(self) -> bool:
         """Kết nối tới máy ảo Android hoặc điện thoại qua mạng"""
+        self._check_abort()
         if not self.adb_ip:
             logger.error("[ADB] Lỗi: Chưa cấu hình Device ID (adb_ip) cho tài khoản này.")
             return False
@@ -118,6 +138,7 @@ class ADBUploader(BaseUploaderEngine):
         return False
 
     def upload(self, video_path: str, caption: str, hashtags: str) -> str:
+        self._check_abort()
         logger.info(f"[ADB] Bắt đầu đẩy video sang điện thoại {self.adb_ip}: {video_path}")
         
         if not self.connect():
@@ -127,29 +148,37 @@ class ADBUploader(BaseUploaderEngine):
             raise Exception(f"File video không tồn tại: {video_path}")
 
         # 1. Dọn dẹp các video reup cũ trên điện thoại để tránh đầy bộ nhớ và chọn nhầm
+        self._check_abort()
         self._run_adb_cmd(["shell", "rm", "-f", "/sdcard/DCIM/Camera/Camerep_*.mp4"])
         
-        # 1.5 Cập nhật Metadata Creation Time của Video thành hiện tại để đảm bảo Tiktok xếp nó lên đầu tiên
-        logger.info("[ADB] Cập nhật Metadata Creation Time cho video...")
-        new_video_path = video_path.replace(".mp4", f"_{int(time.time())}.mp4")
+        # 1.5 Tạo file tạm an toàn thuần ASCII trong data/temp để tránh lỗi đường dẫn tiếng Trung khi push ADB
+        import shutil
+        from app.core.config import DATA_DIR
+        temp_dir = os.path.join(DATA_DIR, "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        safe_temp_video = os.path.join(temp_dir, f"adb_upload_{int(time.time())}_{uuid.uuid4().hex[:6]}.mp4")
+        
+        logger.info(f"[ADB] Chuẩn bị file tạm an toàn ASCII: {safe_temp_video}")
         from datetime import timezone
         current_time_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        # Cập nhật Metadata Creation Time của Video thành hiện tại
         try:
             subprocess.run([
                 "ffmpeg", "-y", "-i", video_path, 
                 "-c", "copy", 
                 "-metadata", f"creation_time={current_time_iso}", 
-                new_video_path
+                safe_temp_video
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            video_path = new_video_path
         except Exception as e:
-            logger.warning(f"[ADB] Không thể cập nhật metadata bằng ffmpeg, bỏ qua: {e}")
+            logger.warning(f"[ADB] Không thể cập nhật metadata bằng ffmpeg, sao chép trực tiếp: {e}")
+            shutil.copy2(video_path, safe_temp_video)
             
         # 2. Push video sang bộ nhớ điện thoại (Thư mục Camera để Tiktok dễ nhận diện nhất)
         self._run_adb_cmd(["shell", "mkdir", "-p", "/sdcard/DCIM/Camera"])
         remote_path = f"/sdcard/DCIM/Camera/Camerep_{int(time.time())}.mp4"
         logger.info(f"[ADB] Pushing video to {remote_path}...")
-        self._run_adb_cmd(["push", video_path, remote_path], timeout=120)
+        self._run_adb_cmd(["push", safe_temp_video, remote_path], timeout=120)
         
         # Cập nhật timestamp của file thành hiện tại để luôn đứng đầu thư viện
         self._run_adb_cmd(["shell", "touch", remote_path])
@@ -175,6 +204,13 @@ class ADBUploader(BaseUploaderEngine):
             else:
                 raise Exception(f"Nền tảng App {platform} chưa được hỗ trợ qua ADB.")
         finally:
+            # Dọn dẹp file tạm trên máy chủ
+            if os.path.exists(safe_temp_video):
+                try:
+                    os.remove(safe_temp_video)
+                    logger.info(f"[ADB] Đã dọn dẹp file tạm: {safe_temp_video}")
+                except Exception as cleanup_err:
+                    logger.warning(f"[ADB] Không thể xóa file tạm {safe_temp_video}: {cleanup_err}")
             logger.info("[ADB] Dọn dẹp: Đóng hoàn toàn các App sau quá trình upload...")
             self._run_adb_cmd(["shell", "am", "force-stop", "com.zhiliaoapp.musically"])
             self._run_adb_cmd(["shell", "am", "force-stop", "com.ss.android.ugc.trill"])

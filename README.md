@@ -26,7 +26,49 @@ Hệ thống được lột xác hoàn toàn diện mạo mới theo phong cách
 
 ---
 
-## ⚡ 2. CÁC TÍNH NĂNG NỔI BẬT
+## 📂 2. CẤU TRÚC DỰ ÁN (PROJECT ARCHITECTURE)
+
+Hệ thống được tổ chức theo cấu trúc module hóa phân tầng rõ ràng, tách bạch giữa Backend, Frontend, Remote GPU, Scripts vận hành và Tài liệu kỹ thuật:
+
+```text
+auto_reup/
+├── .agent/                      # Cấu hình AI Agent Antigravity (Skills, Rules, Workflows)
+├── backend/                     # Dịch vụ Backend FastAPI & Celery Worker
+│   ├── app/                     # Mã nguồn chính (api, core, db, models, services, tasks)
+│   ├── tests/                   # Toàn bộ Unit & Integration tests của Backend
+│   ├── Dockerfile               # Cấu hình container Backend
+│   ├── main.py                  # Entrypoint ứng dụng FastAPI
+│   └── requirements.txt         # Thư viện Python phụ thuộc
+├── frontend/                    # Giao diện quản trị Web UI (React + Vite + Tailwind)
+│   ├── src/                     # Mã nguồn React components & pages
+│   ├── index.html & vite.config # Cấu hình Vite build
+│   └── package.json             # Dependencies Frontend
+├── colab_hybrid/                # Module tích hợp GPU đám mây (Google Colab Server & Client)
+├── local_agent/                 # Tiện ích Desktop hỗ trợ đăng nhập TikTok & quản lý phiên
+├── docs/                        # Toàn bộ tài liệu hệ thống (Xem docs/README.md)
+│   ├── architecture/            # Thiết kế kiến trúc & luồng dữ liệu
+│   ├── guides/                  # Cẩm nang hướng dẫn cài đặt & vận hành
+│   ├── phases/                  # Đặc tả kỹ thuật các Phase phát triển
+│   └── tasks/                   # Nhiệm vụ, kế hoạch & ghi chú nghiên cứu
+├── logs/                        # Thư mục lưu trữ nhật ký hoạt động (bot.log, celery.log)
+├── scripts/                     # Kịch bản tiện ích vận hành & kiểm thử
+│   ├── adb/                     # Kiểm thử ADB điện thoại & giả lập
+│   ├── database/                # Tiện ích tra cứu & tối ưu database
+│   └── debug/                   # Script phân tích & debug hình ảnh/video
+├── data/                        # Dữ liệu runtime (DB SQLite/Postgres, video, cookies)
+├── docker-compose.yml           # Khởi chạy Docker services (Postgres, Redis, Frontend, 9router)
+├── start_backend.bat            # Script 1-click khởi chạy Backend & Celery native trên Windows
+├── README.md                    # Cẩm nang tổng quan hệ thống & Quickstart
+├── SETUP_GUIDE.md               # Hướng dẫn cài đặt A-Z chi tiết
+├── ERRORS.md                    # Nhật ký theo dõi lỗi tự học
+└── GEMINI.md                    # Định danh & quy tắc AI Agent Antigravity
+```
+
+> 📖 Chi tiết tài liệu kỹ thuật của từng module, vui lòng tham khảo [Mục lục Tài liệu](file:///docs/README.md).
+
+---
+
+## ⚡ 3. CÁC TÍNH NĂNG NỔI BẬT
 
 *   **🕷️ Crawler Siêu Việt:** Hỗ trợ cào video đơn lẻ hoặc quét toàn bộ Profile Douyin/TikTok. Tích hợp thuật toán sinh mã `a_bogus` và tự vượt rào Captcha bằng trình duyệt ngầm Playwright để lấy Cookie mới.
 *   **🎬 Render Video Lách Bản Quyền:** Tự động lật gương (Mirror), zoom nhẹ, điều chỉnh tốc độ, chỉnh cân bằng màu và khử nhiễu.
@@ -40,7 +82,7 @@ Hệ thống được lột xác hoàn toàn diện mạo mới theo phong cách
 
 ---
 
-## 🛠️ 3. YÊU CẦU HỆ THỐNG & CÀI ĐẶT
+## 🛠️ 4. YÊU CẦU HỆ THỐNG & CÀI ĐẶT
 
 ### 📌 Yêu Cầu Chuẩn Bị
 *   **Hệ điều hành:** Khuyên dùng Windows 10/11 (hỗ trợ tốt nhất cho các phần mềm giả lập và GPM Login).
@@ -67,7 +109,7 @@ Hệ thống được lột xác hoàn toàn diện mạo mới theo phong cách
 
 ---
 
-## 📚 4. HƯỚNG DẪN SỬ DỤNG CHI TIẾT (STEP-BY-STEP)
+## 📚 5. HƯỚNG DẪN SỬ DỤNG CHI TIẾT (STEP-BY-STEP)
 
 Hệ thống điều hướng chính được tối ưu hóa, chia thành 3 nhóm danh mục rõ ràng trên Sidebar:
 
@@ -116,7 +158,7 @@ Hệ thống điều hướng chính được tối ưu hóa, chia thành 3 nhó
 
 ---
 
-## ⚠️ 5. XỬ LÝ SỰ CỐ THƯỜNG GẶP (TROUBLESHOOTING)
+## ⚠️ 6. XỬ LÝ SỰ CỐ THƯỜNG GẶP (TROUBLESHOOTING)
 
 > [!WARNING]
 > ### 1. Lỗi Không Thể Kết Nối ADB Trong Docker

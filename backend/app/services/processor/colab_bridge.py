@@ -184,36 +184,71 @@ class ColabBridge:
             if log_callback:
                 log_callback("[*] ☁️ [Colab T4] Đang gửi dữ liệu video sang Google Colab để render NVENC...\n", progress=52.0)
 
-            res = requests.post(url, data=data, files=files, timeout=timeout, stream=True)
+            res = requests.post(url, data=data, files=files, timeout=timeout)
             res.raise_for_status()
 
-            total_bytes = int(res.headers.get("content-length", 0))
-            total_mb = total_bytes / (1024 * 1024) if total_bytes > 0 else 0
+            content_type = res.headers.get("content-type", "")
 
+            # Pha 1: Nếu Colab trả về JSON (hệ thống URL tĩnh)
+            if "application/json" in content_type:
+                resp_data = res.json()
+                video_url = resp_data.get("video_url")
+                total_bytes = resp_data.get("size_bytes", 0)
+                total_mb = total_bytes / (1024 * 1024) if total_bytes > 0 else 0
+
+                if not video_url:
+                    raise ValueError(f"Colab không trả về đường dẫn video: {resp_data}")
+
+                download_url = f"{base_url}{video_url}"
+                if log_callback:
+                    if total_mb > 0:
+                        log_callback(f"[+] ☁️ [Colab T4] GPU đã render xong ({total_mb:.1f} MB)! Bắt đầu tải video về máy...\n", progress=70.0)
+                    else:
+                        log_callback("[+] ☁️ [Colab T4] GPU đã render xong! Bắt đầu tải video về máy...\n", progress=70.0)
+
+                down_res = requests.get(download_url, stream=True, timeout=300)
+                down_res.raise_for_status()
+
+                if not total_bytes:
+                    total_bytes = int(down_res.headers.get("content-length", 0))
+                    total_mb = total_bytes / (1024 * 1024) if total_bytes > 0 else 0
+
+                os.makedirs(os.path.dirname(os.path.abspath(output_video_path)), exist_ok=True)
+                downloaded = 0
+                last_reported_pct = 0
+
+                with open(output_video_path, "wb") as f:
+                    for chunk in down_res.iter_content(chunk_size=131072):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_bytes > 0 and log_callback:
+                                pct = int((downloaded / total_bytes) * 100)
+                                if pct - last_reported_pct >= 10:
+                                    last_reported_pct = pct
+                                    curr_prog = 70.0 + (pct / 100.0) * 25.0
+                                    log_callback(f"[*] ☁️ [Colab T4] Đang nhận video: {downloaded/(1024*1024):.1f} MB / {total_mb:.1f} MB ({pct}%)...\n", progress=curr_prog)
+
+            # Pha 2: Fallback nếu Colab đang chạy phiên bản cũ trả về FileResponse
+            else:
+                total_bytes = int(res.headers.get("content-length", 0))
+                total_mb = total_bytes / (1024 * 1024) if total_bytes > 0 else 0
+
+                if log_callback:
+                    log_callback("[+] ☁️ [Colab T4] GPU đã render xong! Đang lưu video thành phẩm...\n", progress=75.0)
+
+                os.makedirs(os.path.dirname(os.path.abspath(output_video_path)), exist_ok=True)
+                with open(output_video_path, "wb") as f:
+                    for chunk in res.iter_content(chunk_size=65536):
+                        if chunk:
+                            f.write(chunk)
+
+            if not os.path.exists(output_video_path) or os.path.getsize(output_video_path) == 0:
+                raise ValueError("File video nhận được từ Colab bị rỗng (0 bytes).")
+
+            final_mb = os.path.getsize(output_video_path) / (1024 * 1024)
             if log_callback:
-                if total_mb > 0:
-                    log_callback(f"[+] ☁️ [Colab T4] GPU đã render xong! Đang tải video thành phẩm ({total_mb:.1f} MB) về máy...\n", progress=75.0)
-                else:
-                    log_callback("[+] ☁️ [Colab T4] GPU đã render xong! Đang tải video thành phẩm về máy...\n", progress=75.0)
-
-            os.makedirs(os.path.dirname(os.path.abspath(output_video_path)), exist_ok=True)
-            downloaded = 0
-            last_reported_pct = 0
-
-            with open(output_video_path, "wb") as f:
-                for chunk in res.iter_content(chunk_size=65536):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_bytes > 0 and log_callback:
-                            pct = int((downloaded / total_bytes) * 100)
-                            if pct - last_reported_pct >= 15:
-                                last_reported_pct = pct
-                                curr_prog = 75.0 + (pct / 100.0) * 20.0
-                                log_callback(f"[*] ☁️ [Colab T4] Đang nhận video: {downloaded/(1024*1024):.1f} MB / {total_mb:.1f} MB ({pct}%)...\n", progress=curr_prog)
-
-            if log_callback:
-                log_callback(f"[+] ☁️ [Colab T4] Đã nhận và lưu video thành phẩm an toàn: {os.path.basename(output_video_path)}\n", progress=95.0)
+                log_callback(f"[+] ☁️ [Colab T4] Đã nhận và lưu video thành phẩm an toàn: {os.path.basename(output_video_path)} ({final_mb:.1f} MB)!\n", progress=95.0)
 
             return output_video_path
         finally:

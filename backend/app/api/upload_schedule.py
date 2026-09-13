@@ -18,6 +18,7 @@ class UploadScheduleCreate(BaseModel):
     hashtags: Optional[str] = None
     scheduled_time: Optional[datetime] = None
     engine_type: Optional[str] = "playwright"
+    allow_duplicate: Optional[bool] = False
 
 class UploadScheduleResponse(BaseModel):
     id: int
@@ -130,15 +131,18 @@ def create_schedule(schedule: UploadScheduleCreate, db: Session = Depends(get_db
     if not account:
         raise HTTPException(status_code=404, detail="Tài khoản MXH không tồn tại")
         
-    # Check duplicate (tránh 1 video đăng 2 lần lên 1 account)
-    existing = db.query(UploadSchedule).filter(
-        UploadSchedule.video_history_id == schedule.video_history_id,
-        UploadSchedule.account_id == schedule.account_id
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Video này đã được lên lịch cho tài khoản này")
+    # Check duplicate (tránh 1 video đăng 2 lần lên 1 account nếu không có flag cho phép)
+    if not schedule.allow_duplicate:
+        existing = db.query(UploadSchedule).filter(
+            UploadSchedule.video_history_id == schedule.video_history_id,
+            UploadSchedule.account_id == schedule.account_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Video này đã được lên lịch cho tài khoản này")
 
-    db_schedule = UploadSchedule(**schedule.model_dump())
+    schedule_data = schedule.model_dump()
+    schedule_data.pop("allow_duplicate", None)
+    db_schedule = UploadSchedule(**schedule_data)
     db.add(db_schedule)
     db.commit()
     db.refresh(db_schedule)

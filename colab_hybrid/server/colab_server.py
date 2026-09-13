@@ -222,12 +222,15 @@ def render_video(
             watermark_text=watermark_text,
         )
 
-        return FileResponse(
-            out_video_path,
-            media_type="video/mp4",
-            filename=out_vid_name,
-            headers={"X-File-Url": f"/files/outputs/{out_vid_name}"},
-        )
+        rel_path = os.path.relpath(out_video_path, STORAGE_DIR).replace("\\", "/")
+        file_size = os.path.getsize(out_video_path) if os.path.exists(out_video_path) else 0
+
+        return {
+            "status": "success",
+            "video_url": f"/files/{rel_path}",
+            "filename": out_vid_name,
+            "size_bytes": file_size,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"NVENC Video render failed: {str(e)}")
     finally:
