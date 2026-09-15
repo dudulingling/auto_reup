@@ -3,7 +3,7 @@ import glob
 from app.services.processor.steps.base_step import ProcessorStep
 from app.models.history import ProcessStatus
 from app.services.processor.transcriber import GroqQuotaExceeded
-from app.services.processor.audio_extractor import extract_audio, separate_audio_with_ai
+from app.services.processor.audio_extractor import extract_audio, separate_audio_with_ai, release_audio_separator
 
 class TranscribeStep(ProcessorStep):
     def execute(self, context: dict) -> bool:
@@ -55,6 +55,8 @@ class TranscribeStep(ProcessorStep):
                 v_path, i_path = separate_audio_with_ai(audio_tmp, audio_dir, log_callback)
                 if v_path: vocal_audio_path = v_path
                 if i_path: context['instrumental_audio_path'] = i_path
+                # Thu hồi VRAM ngay sau khi UVR5 tách âm xong để dành tài nguyên cho VieNeu TTS
+                release_audio_separator(log_callback)
                 
             if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
                 raise Exception("Tiến trình bị hủy bởi người dùng.")

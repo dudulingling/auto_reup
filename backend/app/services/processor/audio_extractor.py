@@ -213,3 +213,33 @@ def separate_audio_with_ai(audio_path: str, output_dir: str, log_callback=None):
         if log_callback:
             log_callback(f"[!] Lỗi khi tách âm thanh AI: {e}. Sẽ sử dụng âm thanh gốc.\n")
         return audio_path, None
+
+def release_audio_separator(log_callback=None):
+    """
+    Giải phóng toàn bộ mô hình UVR5 Separator (ONNX Runtime / CUDA context)
+    và thu hồi bộ nhớ VRAM/RAM để chuẩn bị tài nguyên cho các tác vụ tiếp theo (như VieNeu-TTS).
+    """
+    global _separator_instance
+    with _separator_lock:
+        if _separator_instance is not None:
+            try:
+                del _separator_instance
+            except Exception:
+                pass
+            _separator_instance = None
+            
+            import gc
+            gc.collect()
+            
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+            except Exception:
+                pass
+                
+            if log_callback:
+                log_callback("[*] [VRAM] Đã giải phóng hoàn toàn mô hình UVR5 và bộ nhớ VRAM.\n")
+            return True
+    return False

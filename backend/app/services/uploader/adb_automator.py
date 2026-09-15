@@ -6,8 +6,10 @@ import tempfile
 import base64
 import xml.etree.ElementTree as ET
 import logging
-logger = logging.getLogger(__name__)
+from app.core.logger import get_logger
+logger = get_logger(__name__)
 import urllib.request
+
 
 class ADBAutomator:
     def __init__(self, adb_ip: str):

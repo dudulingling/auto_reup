@@ -79,6 +79,8 @@ export const ProcessorProvider = ({ children }) => {
           watermark_color: options.subConfig?.watermarkColor || '#FFFFFF',
           watermark_opacity: options.subConfig?.watermarkOpacity ?? 50.0,
           enable_subtitles: options.subConfig?.enableSubtitles ?? true,
+          enable_ai_subtitle_polish: options.subConfig?.enableAiSubtitlePolish ?? true,
+          subtitle_polish_style: options.subConfig?.subtitlePolishStyle || 'tiktok_viral',
           mask_enabled: options.subConfig?.maskEnabled ?? false,
           mask_x: options.subConfig?.maskX ?? 10.0,
           mask_y: options.subConfig?.maskY ?? 10.0,

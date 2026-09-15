@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Type, ShieldAlert, Sliders, Plus, Trash2, Mic, Wand2, RefreshCw } from 'lucide-react';
+import { Type, ShieldAlert, Sliders, Plus, Trash2, Mic, Wand2, RefreshCw, Sparkles } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export const SubtitleConfigPanel = ({ config }) => {
@@ -119,6 +119,102 @@ export const SubtitleConfigPanel = ({ config }) => {
             Chỉ áp dụng khi Bcut bị lỗi và hệ thống lùi về dùng Whisper. "Tự động" giúp chống lỗi ảo giác lệch thời gian.
           </p>
         </div>
+      </div>
+
+      {/* AI Subtitle Polish & Script Doctor Panel */}
+      <div className="bg-bg-secondary/40 rounded-2xl border border-white/5 p-5 w-full relative overflow-hidden">
+        <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-3">
+          <div className="flex items-center gap-2">
+            <Wand2 size={18} className="text-neon-cyan" />
+            <label className="text-sm font-bold text-text-primary font-display flex items-center gap-2">
+              Hiệu chỉnh & Làm đẹp Phụ đề AI
+              <span className="px-2 py-0.5 text-[10px] font-semibold bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/25 rounded-full">
+                AI Script Doctor
+              </span>
+            </label>
+          </div>
+
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={config.enableAiSubtitlePolish ?? true} 
+              onChange={(e) => config.setEnableAiSubtitlePolish(e.target.checked)} 
+              className="sr-only peer"
+            />
+            <div className="w-9 h-5 bg-bg-primary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border-subtle after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-neon-cyan"></div>
+          </label>
+        </div>
+
+        <p className="text-xs text-text-secondary mb-4 leading-relaxed">
+          Tự động hàn gắn câu cụt lủn do Whisper cắt vụn, chèn dấu ngắt nghỉ chuẩn xác cho giọng đọc TTS truyền cảm, và cân đối độ dài thị giác (5–8 từ/dòng).
+        </p>
+
+        {config.enableAiSubtitlePolish && (
+          <motion.div 
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-3"
+          >
+            <label className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+              <Sparkles size={14} className="text-amber-400" />
+              Phong cách Kịch bản & Ngôn từ
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                {
+                  id: "tiktok_viral",
+                  icon: "⚡",
+                  title: "TikTok Viral",
+                  desc: "Ngắn gọn, giật tít nhẹ, bắt trend, cuốn hút ngay 3s đầu",
+                  color: "border-neon-cyan bg-neon-cyan/10 text-neon-cyan"
+                },
+                {
+                  id: "reviewer",
+                  icon: "🍜",
+                  title: "Reviewer / Đời sống",
+                  desc: "Trực diện, chân thực, hào hứng, cảm nhận sắc sảo",
+                  color: "border-neon-pink bg-neon-pink/10 text-neon-pink"
+                },
+                {
+                  id: "storytelling",
+                  icon: "📖",
+                  title: "Kể chuyện / Tâm sự",
+                  desc: "Mượt mà, sâu lắng, trau chuốt, giàu cảm xúc",
+                  color: "border-neon-purple bg-neon-purple/10 text-neon-purple"
+                },
+                {
+                  id: "formal",
+                  icon: "📰",
+                  title: "Tin tức / Kiến thức",
+                  desc: "Gãy gọn, chuẩn xác, trung tính, cấu trúc chuẩn",
+                  color: "border-emerald-400 bg-emerald-400/10 text-emerald-400"
+                }
+              ].map((style) => {
+                const isSelected = (config.subtitlePolishStyle || 'tiktok_viral') === style.id;
+                return (
+                  <div
+                    key={style.id}
+                    onClick={() => config.setSubtitlePolishStyle(style.id)}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all duration-200 ${
+                      isSelected 
+                        ? `${style.color} shadow-sm ring-1 ring-white/10` 
+                        : 'bg-bg-primary/20 border-white/5 hover:border-white/10 text-text-secondary hover:text-text-primary'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold text-xs mb-1">
+                      <span>{style.icon}</span>
+                      <span>{style.title}</span>
+                      {isSelected && <span className="ml-auto text-[10px] font-mono font-bold">✓ Đang chọn</span>}
+                    </div>
+                    <div className="text-[11px] opacity-80 leading-snug">
+                      {style.desc}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Micro-alterations Panel */}

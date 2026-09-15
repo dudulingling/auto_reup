@@ -47,6 +47,21 @@ celery_app.conf.beat_schedule = {
     }
 }
 
+from celery.signals import worker_process_init, after_setup_logger, after_setup_task_logger
+
+@after_setup_logger.connect
+@after_setup_task_logger.connect
+def _setup_celery_logger(logger, **kwargs):
+    """Đảm bảo mọi log của Celery Worker và Task đều được ghi vào session_*.log và latest.log"""
+    try:
+        from app.core.logger import session_handler, latest_handler
+        if session_handler not in logger.handlers:
+            logger.addHandler(session_handler)
+        if latest_handler not in logger.handlers:
+            logger.addHandler(latest_handler)
+    except Exception:
+        pass
+
 @worker_process_init.connect
 def _fix_cudnn_on_worker_start(**kwargs):
     """Disable cuDNN/Flash SDP at worker boot to prevent Error 127.
@@ -62,3 +77,4 @@ def _fix_cudnn_on_worker_start(**kwargs):
         torch.backends.cuda.enable_mem_efficient_sdp(False)
     except Exception:
         pass
+

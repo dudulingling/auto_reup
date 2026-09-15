@@ -66,6 +66,8 @@ class ProcessRequest(BaseModel):
     watermark_color: str = "#FFFFFF"
     watermark_opacity: float = 50.0
     enable_subtitles: bool = True
+    enable_ai_subtitle_polish: bool = True
+    subtitle_polish_style: str = "tiktok_viral"
     mask_enabled: bool = False
     mask_x: float = 10.0
     mask_y: float = 10.0
@@ -266,6 +268,8 @@ async def start_processor(request: ProcessRequest):
                     "subtitle_margin_v": request.subtitle_margin_v,
                     "subtitle_bg_padding": request.subtitle_bg_padding,
                     "enable_subtitles": request.enable_subtitles,
+                    "enable_ai_subtitle_polish": request.enable_ai_subtitle_polish,
+                    "subtitle_polish_style": request.subtitle_polish_style,
                     "mask_enabled": request.mask_enabled,
                     "mask_x": request.mask_x,
                     "mask_y": request.mask_y,

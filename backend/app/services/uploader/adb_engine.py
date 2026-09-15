@@ -8,9 +8,25 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any
 from .base_engine import BaseUploaderEngine, TaskAbortedByUser
-from .adb_automator import ADBAutomator
 
-logger = logging.getLogger(__name__)
+from .adb_automator import ADBAutomator
+from app.core.logger import get_logger
+from app.utils.video_metadata import get_device_camera_profile, spoof_camera_metadata, verify_file_integrity
+
+
+logger = get_logger(__name__)
+
+
+
+class ADBCommandError(Exception):
+    """Lỗi khi chạy lệnh ADB thất bại (exit code != 0)"""
+    pass
+
+
+class ADBTimeoutError(Exception):
+    """Lỗi khi chạy lệnh ADB bị quá thời gian chờ (TimeoutExpired)"""
+    pass
+
 
 
 
@@ -93,21 +109,33 @@ class ADBUploader(BaseUploaderEngine):
         except Exception:
             pass
 
-    def _run_adb_cmd(self, args: list, timeout: int = 60) -> str:
+    def _run_adb_cmd(self, args: list, timeout: int = 60, check: bool = False) -> str:
         """Chạy lệnh adb tới thiết bị cụ thể"""
         self._check_abort()
         cmd = ["adb", "-s", self.adb_ip] + args
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, encoding='utf-8', errors='replace')
             if result.returncode != 0:
-                logger.error(f"[ADB] Lỗi khi chạy lệnh {cmd}: {result.stderr}")
+                err_msg = f"[ADB] Lỗi khi chạy lệnh {cmd} (code {result.returncode}): {result.stderr.strip()}"
+                logger.error(err_msg)
+                if check:
+                    raise ADBCommandError(err_msg)
             return result.stdout.strip()
         except subprocess.TimeoutExpired:
-            logger.error(f"[ADB] Timeout khi chạy lệnh {cmd}")
+            err_msg = f"[ADB] Timeout sau {timeout}s khi chạy lệnh {cmd}"
+            logger.error(err_msg)
+            if check:
+                raise ADBTimeoutError(err_msg)
             return ""
         except Exception as e:
-            logger.error(f"[ADB] Lỗi không xác định: {e}")
+            if isinstance(e, (ADBCommandError, ADBTimeoutError, TaskAbortedByUser)):
+                raise
+            err_msg = f"[ADB] Lỗi không xác định khi chạy lệnh {cmd}: {e}"
+            logger.error(err_msg)
+            if check:
+                raise ADBCommandError(err_msg)
             return ""
+
 
     def connect(self) -> bool:
         """Kết nối tới máy ảo Android hoặc điện thoại qua mạng"""
@@ -147,46 +175,84 @@ class ADBUploader(BaseUploaderEngine):
         if not os.path.exists(video_path):
             raise Exception(f"File video không tồn tại: {video_path}")
 
-        # 1. Dọn dẹp các video reup cũ trên điện thoại để tránh đầy bộ nhớ và chọn nhầm
-        self._check_abort()
-        self._run_adb_cmd(["shell", "rm", "-f", "/sdcard/DCIM/Camera/Camerep_*.mp4"])
-        
-        # 1.5 Tạo file tạm an toàn thuần ASCII trong data/temp để tránh lỗi đường dẫn tiếng Trung khi push ADB
+        remote_path = ""
+        safe_temp_video = ""
+
+        # 1. Chuẩn bị file tạm và đặt tên chuẩn Camera thật (VD: VID_20260915_150823.mp4)
         import shutil
         from app.core.config import DATA_DIR
+        from datetime import timedelta
+        
+        minutes_offset = random.randint(5, 15)
+        simulated_time = datetime.now() - timedelta(minutes=minutes_offset)
+        camera_filename = simulated_time.strftime("VID_%Y%m%d_%H%M%S.mp4")
+
         temp_dir = os.path.join(DATA_DIR, "temp")
         os.makedirs(temp_dir, exist_ok=True)
-        safe_temp_video = os.path.join(temp_dir, f"adb_upload_{int(time.time())}_{uuid.uuid4().hex[:6]}.mp4")
+        safe_temp_video = os.path.join(temp_dir, camera_filename)
         
-        logger.info(f"[ADB] Chuẩn bị file tạm an toàn ASCII: {safe_temp_video}")
-        from datetime import timezone
-        current_time_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        logger.info(f"[ADB] Chuẩn bị file an toàn với tên Camera thật & Giả lập Metadata: {camera_filename}")
         
-        # Cập nhật Metadata Creation Time của Video thành hiện tại
-        try:
-            subprocess.run([
-                "ffmpeg", "-y", "-i", video_path, 
-                "-c", "copy", 
-                "-metadata", f"creation_time={current_time_iso}", 
-                safe_temp_video
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception as e:
-            logger.warning(f"[ADB] Không thể cập nhật metadata bằng ffmpeg, sao chép trực tiếp: {e}")
-            shutil.copy2(video_path, safe_temp_video)
+        # Tự động lấy cấu hình phần cứng từ chính điện thoại đang kết nối ADB (hoặc Preset camera)
+        device_profile = get_device_camera_profile(self.adb_ip)
+        
+        # Remux video với thông số Camera điện thoại và kiểm tra tính toàn vẹn (integrity check trên HDD)
+        spoof_camera_metadata(video_path, safe_temp_video, device_profile=device_profile, creation_time=simulated_time, timeout=300)
+        
+        if not verify_file_integrity(video_path, safe_temp_video):
+            raise Exception("File tạm sau khi chuẩn bị trên ổ đĩa không đạt tiêu chuẩn toàn vẹn (bị rỗng hoặc lỗi I/O HDD).")
             
-        # 2. Push video sang bộ nhớ điện thoại (Thư mục Camera để Tiktok dễ nhận diện nhất)
-        self._run_adb_cmd(["shell", "mkdir", "-p", "/sdcard/DCIM/Camera"])
-        remote_path = f"/sdcard/DCIM/Camera/Camerep_{int(time.time())}.mp4"
+        local_file_size = os.path.getsize(safe_temp_video)
+        file_size_mb = local_file_size / (1024 * 1024)
+        # Tính toán Dynamic Timeout cho ADB push: Tối thiểu 180s, cộng thời gian dự kiến theo dung lượng (1.5 MB/s worst case USB/Wifi)
+        push_timeout = max(180, int(file_size_mb / 1.5) + 60)
+        logger.info(f"[ADB] Dung lượng video: {file_size_mb:.2f} MB | Timeout push: {push_timeout}s")
+            
+        # 2. Push video sang bộ nhớ điện thoại (Thư mục Camera với tên chuẩn Camera Android)
+        self._run_adb_cmd(["shell", "mkdir", "-p", "/sdcard/DCIM/Camera"], check=True)
+        remote_path = f"/sdcard/DCIM/Camera/{camera_filename}"
         logger.info(f"[ADB] Pushing video to {remote_path}...")
-        self._run_adb_cmd(["push", safe_temp_video, remote_path], timeout=120)
+        
+        try:
+            self._run_adb_cmd(["push", safe_temp_video, remote_path], timeout=push_timeout, check=True)
+        except Exception as push_err:
+            # Xóa file dở dang trên điện thoại nếu có và dừng task ngay lập tức
+            self._run_adb_cmd(["shell", "rm", "-f", remote_path])
+            raise Exception(f"Push video sang điện thoại qua ADB thất bại: {push_err}")
+            
+        # 2.1 Xác thực tính toàn vẹn của video trực tiếp trên điện thoại (Verify on device)
+        logger.info("[ADB] Đang xác thực dung lượng file trên điện thoại sau khi push...")
+        remote_size = None
+        size_output = self._run_adb_cmd(["shell", "stat", "-c", "%s", remote_path])
+        if size_output and size_output.isdigit():
+            remote_size = int(size_output)
+        else:
+            # Fallback nếu lệnh stat không hỗ trợ trên ROM Android tùy biến
+            ls_output = self._run_adb_cmd(["shell", "ls", "-l", remote_path])
+            match = re.search(r'\s+(\d+)\s+\d{4}-\d{2}-\d{2}', ls_output)
+            if match:
+                remote_size = int(match.group(1))
+                
+        if remote_size is not None:
+            if remote_size != local_file_size:
+                logger.error(f"[ADB] Dung lượng file trên điện thoại ({remote_size} bytes) KHÔNG khớp với PC ({local_file_size} bytes)!")
+                self._run_adb_cmd(["shell", "rm", "-f", remote_path])
+                raise Exception(f"Video truyền sang điện thoại bị lỗi/cắt cụt: kích thước nhận được {remote_size} bytes khác {local_file_size} bytes gốc.")
+            else:
+                logger.info(f"[ADB] Xác thực file trên điện thoại thành công 100% ({remote_size} bytes).")
+        else:
+            ls_check = self._run_adb_cmd(["shell", "ls", remote_path])
+            if "No such file" in ls_check or not ls_check:
+                raise Exception(f"File video không tồn tại trên điện thoại sau khi push: {remote_path}")
         
         # Cập nhật timestamp của file thành hiện tại để luôn đứng đầu thư viện
         self._run_adb_cmd(["shell", "touch", remote_path])
         
-        # 2. Bắn Broadcast để hệ điều hành quét lại thư viện media (để app thấy video)
+        # 2.2 Bắn Broadcast để hệ điều hành quét lại thư viện media (để app thấy video)
         logger.info("[ADB] Cập nhật thư viện Media...")
         self._run_adb_cmd(["shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", f"file://{remote_path}"])
         self._smart_sleep(5) # Đợi lâu hơn một chút để Android kịp index video mới
+
 
         # Phân loại nền tảng
         platform = self.account_data.get("platform", "douyin").lower()
@@ -204,17 +270,29 @@ class ADBUploader(BaseUploaderEngine):
             else:
                 raise Exception(f"Nền tảng App {platform} chưa được hỗ trợ qua ADB.")
         finally:
-            # Dọn dẹp file tạm trên máy chủ
-            if os.path.exists(safe_temp_video):
+            # 1. Dọn dẹp file tạm trên máy chủ PC
+            if safe_temp_video and os.path.exists(safe_temp_video):
                 try:
                     os.remove(safe_temp_video)
-                    logger.info(f"[ADB] Đã dọn dẹp file tạm: {safe_temp_video}")
+                    logger.info(f"[ADB] Đã dọn dẹp file tạm trên PC: {safe_temp_video}")
                 except Exception as cleanup_err:
-                    logger.warning(f"[ADB] Không thể xóa file tạm {safe_temp_video}: {cleanup_err}")
+                    logger.warning(f"[ADB] Không thể xóa file tạm PC {safe_temp_video}: {cleanup_err}")
+
+            # 2. Đóng hoàn toàn các App sau quá trình upload
             logger.info("[ADB] Dọn dẹp: Đóng hoàn toàn các App sau quá trình upload...")
             self._run_adb_cmd(["shell", "am", "force-stop", "com.zhiliaoapp.musically"])
             self._run_adb_cmd(["shell", "am", "force-stop", "com.ss.android.ugc.trill"])
             self._run_adb_cmd(["shell", "am", "force-stop", "com.ss.android.ugc.aweme"])
+
+            # 3. Xóa file video vừa đăng trên điện thoại và làm mới thư viện Gallery
+            if remote_path:
+                try:
+                    logger.info(f"[ADB] Dọn dẹp: Xóa video vừa đăng trên điện thoại: {remote_path}")
+                    self._run_adb_cmd(["shell", "rm", "-f", remote_path])
+                    self._run_adb_cmd(["shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", f"file://{remote_path}"])
+                except Exception as rm_err:
+                    logger.warning(f"[ADB] Không thể xóa video trên điện thoại {remote_path}: {rm_err}")
+
 
     def _upload_douyin(self, remote_video_path: str, post_caption: str, automator: ADBAutomator) -> str:
         logger.info("[ADB] Khởi động Douyin App...")

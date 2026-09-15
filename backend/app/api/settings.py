@@ -124,6 +124,8 @@ async def get_edit_profile(video_id: str, db: Session = Depends(get_db)):
                             "subtitleBgPadding": db_config.get("subtitle_bg_padding", 2),
                             "subtitleBgOpacity": db_config.get("subtitle_bg_opacity", 100),
                             "enableSubtitles": db_config.get("enable_subtitles", True),
+                            "enableAiSubtitlePolish": db_config.get("enable_ai_subtitle_polish", True),
+                            "subtitlePolishStyle": db_config.get("subtitle_polish_style", "tiktok_viral"),
                             "maskEnabled": db_config.get("mask_enabled", False),
                             "masks": db_config.get("masks", []),
                             "watermarkType": db_config.get("watermark_type", "none"),

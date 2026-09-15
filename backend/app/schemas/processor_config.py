@@ -37,9 +37,9 @@ class VideoProcessingConfig(BaseModel):
     subtitle_font_size: int = 8
     subtitle_margin_v: int = 40
     subtitle_bg_padding: int = 2
-    subtitle_bg_opacity: int = 100
     enable_subtitles: bool = True
-    
+    enable_ai_subtitle_polish: bool = True
+    subtitle_polish_style: str = "tiktok_viral"
     watermark_type: str = "none"
     watermark_text: Optional[str] = None
     watermark_image_path: Optional[str] = None

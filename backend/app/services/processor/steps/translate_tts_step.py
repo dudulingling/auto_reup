@@ -91,71 +91,98 @@ class TranslateAndTTSStep(ProcessorStep):
             db.commit()
             extract_audio(video_path, audio_tmp)
             
-            tts_queue = queue.Queue()
-            tts_thread = None
-            # Use a separate temp path for TTS to write its time-adjusted SRT,
-            # avoiding race condition with translator writing to vi_srt simultaneously.
-            tts_adjusted_srt = vi_srt.replace('.srt', '_tts_adjusted.srt')
+            enable_ai_polish = getattr(config, 'enable_ai_subtitle_polish', True)
+            polish_style = getattr(config, 'subtitle_polish_style', 'tiktok_viral')
+
+            auto_clone_enabled = os.getenv("ENABLE_AUTO_VOICE_CLONE", "False").lower() == "true"
+            vocal_path_to_clone = vocal_ref_path if auto_clone_enabled else None
             
-            if config.voice_mode != "none" and (not tts_audio_path or not os.path.exists(tts_audio_path) or os.path.getsize(tts_audio_path) == 0):
-                log_callback(f"[*] Bước 3: Tạo âm thanh lồng tiếng AI (Chạy song song)...\n", progress=25.0)
-                auto_clone_enabled = os.getenv("ENABLE_AUTO_VOICE_CLONE", "False").lower() == "true"
-                vocal_path_to_clone = vocal_ref_path if auto_clone_enabled else None
+            if vocal_path_to_clone and os.path.exists(vocal_path_to_clone):
+                short_vocal_path = os.path.join(audio_dir, f"{base_name}_vocal_short.wav")
+                if not os.path.exists(short_vocal_path):
+                    try:
+                        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                        subprocess.run([
+                            ffmpeg_exe, "-y", "-i", vocal_path_to_clone,
+                            "-t", "10", short_vocal_path
+                        ], check=True, capture_output=True)
+                    except Exception as e:
+                        log_callback(f"[!] Cảnh báo: Lỗi khi cắt ngắn vocal mẫu: {e}. Có thể gây tràn RAM.\n")
+                        short_vocal_path = vocal_path_to_clone
+                vocal_path_to_clone = short_vocal_path
+
+            if enable_ai_polish:
+                # ==========================================
+                # CHẾ ĐỘ HIỆU CHỈNH & LÀM ĐẸP PHỤ ĐỀ BẰNG AI
+                # ==========================================
+                # 1. Dịch toàn bộ kịch bản
+                translator.translate_srt(orig_srt, vi_srt, config.voice_mode, audio_tmp, style=polish_style)
                 
-                if vocal_path_to_clone and os.path.exists(vocal_path_to_clone):
-                    short_vocal_path = os.path.join(audio_dir, f"{base_name}_vocal_short.wav")
-                    if not os.path.exists(short_vocal_path):
-                        try:
-                            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-                            subprocess.run([
-                                ffmpeg_exe, "-y", "-i", vocal_path_to_clone,
-                                "-t", "10", short_vocal_path
-                            ], check=True, capture_output=True)
-                        except Exception as e:
-                            log_callback(f"[!] Cảnh báo: Lỗi khi cắt ngắn vocal mẫu: {e}. Có thể gây tràn RAM.\n")
-                            short_vocal_path = vocal_path_to_clone
-                    vocal_path_to_clone = short_vocal_path
+                # 2. Làm đẹp kịch bản, hàn gắn câu cụt, chèn dấu ngắt nghỉ tối ưu cho TTS
+                log_callback(f"[*] Bước 2.1: Hiệu chỉnh & Làm đẹp Phụ đề bằng AI (Style: {polish_style})...\n", progress=22.0)
+                from app.services.processor.subtitle_polisher import SubtitlePolisher
+                polisher = SubtitlePolisher()
+                polisher.polish_srt(vi_srt, vi_srt, style=polish_style)
+
+                # 3. Sinh giọng đọc TTS từ file phụ đề đã được làm đẹp hoàn hảo
+                if config.voice_mode != "none" and (not tts_audio_path or not os.path.exists(tts_audio_path) or os.path.getsize(tts_audio_path) == 0):
+                    log_callback(f"[*] Bước 3: Tạo âm thanh lồng tiếng AI từ kịch bản đã làm đẹp...\n", progress=28.0)
+                    tts.generate_tts_track(vi_srt, tts_audio_path, config.voice_mode, video_path, log_callback, vocal_path_to_clone)
+                    record.audio_tts_path = tts_audio_path
                     
-                tts_thread = threading.Thread(
-                    target=tts.generate_tts_from_queue,
-                    args=(tts_queue, tts_adjusted_srt, tts_audio_path, config.voice_mode, video_path, log_callback, vocal_path_to_clone)
-                )
-                tts_thread.start()
+                    tts_meta_path = os.path.join(audio_dir, f"{base_name}_tts_meta.json")
+                    if os.path.exists(tts_audio_path):
+                        try:
+                            with open(tts_meta_path, 'w', encoding='utf-8') as f:
+                                json.dump({"voice_mode": config.voice_mode}, f)
+                        except Exception:
+                            pass
+            else:
+                # ==========================================
+                # CHẾ ĐỘ DỊCH THÔ & CHẠY SONG SONG (CŨ)
+                # ==========================================
+                tts_queue = queue.Queue()
+                tts_thread = None
+                tts_adjusted_srt = vi_srt.replace('.srt', '_tts_adjusted.srt')
                 
-            def on_chunk(chunk_text):
-                if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
-                    raise Exception("Tiến trình bị hủy bởi người dùng.")
-                if tts_thread:
-                    tts_queue.put(chunk_text)
-        
-            translator.translate_srt(orig_srt, vi_srt, config.voice_mode, audio_tmp, on_chunk_translated=on_chunk)
+                if config.voice_mode != "none" and (not tts_audio_path or not os.path.exists(tts_audio_path) or os.path.getsize(tts_audio_path) == 0):
+                    log_callback(f"[*] Bước 3: Tạo âm thanh lồng tiếng AI (Chạy song song)...\n", progress=25.0)
+                    tts_thread = threading.Thread(
+                        target=tts.generate_tts_from_queue,
+                        args=(tts_queue, tts_adjusted_srt, tts_audio_path, config.voice_mode, video_path, log_callback, vocal_path_to_clone)
+                    )
+                    tts_thread.start()
+                    
+                def on_chunk(chunk_text):
+                    if sync_redis.get(f"pause_video_{base_name}") in (b"1", "1", 1):
+                        raise Exception("Tiến trình bị hủy bởi người dùng.")
+                    if tts_thread:
+                        tts_queue.put(chunk_text)
             
-            if tts_thread:
-                tts_queue.put(None)
-                tts_thread.join()
-                record.audio_tts_path = tts_audio_path
+                translator.translate_srt(orig_srt, vi_srt, config.voice_mode, audio_tmp, on_chunk_translated=on_chunk, style=polish_style)
                 
-                # CRITICAL FIX: TTS thread wrote time-adjusted SRT to a temp file.
-                # Now that both translator and TTS are done, copy the TTS-adjusted
-                # version (which has correct spillover timestamps matching the audio)
-                # over the translator's vi_srt so subtitle timing matches voice timing.
-                if os.path.exists(tts_adjusted_srt) and os.path.getsize(tts_adjusted_srt) > 0:
-                    import shutil
-                    shutil.copy2(tts_adjusted_srt, vi_srt)
-                    try:
-                        os.remove(tts_adjusted_srt)
-                    except Exception:
-                        pass
-                    log_callback(f"[*] Đã đồng bộ thời gian SRT với TTS (Spillover Sync).\n")
-                
-                tts_meta_path = os.path.join(audio_dir, f"{base_name}_tts_meta.json")
-                if os.path.exists(tts_audio_path):
-                    try:
-                        with open(tts_meta_path, 'w', encoding='utf-8') as f:
-                            json.dump({"voice_mode": config.voice_mode}, f)
-                    except Exception:
-                        pass
-                        
+                if tts_thread:
+                    tts_queue.put(None)
+                    tts_thread.join()
+                    record.audio_tts_path = tts_audio_path
+                    
+                    if os.path.exists(tts_adjusted_srt) and os.path.getsize(tts_adjusted_srt) > 0:
+                        import shutil
+                        shutil.copy2(tts_adjusted_srt, vi_srt)
+                        try:
+                            os.remove(tts_adjusted_srt)
+                        except Exception:
+                            pass
+                        log_callback(f"[*] Đã đồng bộ thời gian SRT với TTS (Spillover Sync).\n")
+                    
+                    tts_meta_path = os.path.join(audio_dir, f"{base_name}_tts_meta.json")
+                    if os.path.exists(tts_audio_path):
+                        try:
+                            with open(tts_meta_path, 'w', encoding='utf-8') as f:
+                                json.dump({"voice_mode": config.voice_mode}, f)
+                        except Exception:
+                            pass
+                            
             record.srt_translated_path = vi_srt
             db.commit()
             

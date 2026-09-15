@@ -7,8 +7,10 @@ from typing import Dict, Any
 from .base_engine import BaseUploaderEngine
 from playwright.sync_api import sync_playwright
 from app.core.config import DATA_DIR
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
 
 class PlaywrightUploader(BaseUploaderEngine):
     """

@@ -43,7 +43,7 @@ class Translator:
                 
         subs.save(output_srt, encoding='utf-8')
 
-    def translate_srt(self, input_srt: str, output_srt: str, voice_mode: str = "none", audio_path: str = None, on_chunk_translated=None):
+    def translate_srt(self, input_srt: str, output_srt: str, voice_mode: str = "none", audio_path: str = None, on_chunk_translated=None, style: str = "tiktok_viral"):
         load_dotenv(ENV_PATH, override=True)
         from app.core.security import decrypt_data
         

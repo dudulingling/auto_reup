@@ -27,6 +27,8 @@ export const useSubtitleState = (videoId = 'default', initialConfig = {}) => {
   const [useBcutAsr, setUseBcutAsr] = useState(initialConfig.useBcutAsr ?? false);
   const [useLlmSegmentation, setUseLlmSegmentation] = useState(initialConfig.useLlmSegmentation ?? false);
   const [whisperPrompt, setWhisperPrompt] = useState(initialConfig.whisperPrompt || '');
+  const [enableAiSubtitlePolish, setEnableAiSubtitlePolish] = useState(initialConfig.enableAiSubtitlePolish ?? true);
+  const [subtitlePolishStyle, setSubtitlePolishStyle] = useState(initialConfig.subtitlePolishStyle || 'tiktok_viral');
   
   // Anti-Copyright Score (computed)
   const antiCopyrightScore = useMemo(() => {
@@ -192,6 +194,8 @@ export const useSubtitleState = (videoId = 'default', initialConfig = {}) => {
             if (data.useBcutAsr !== undefined) setUseBcutAsr(data.useBcutAsr);
             if (data.useLlmSegmentation !== undefined) setUseLlmSegmentation(data.useLlmSegmentation);
             if (data.whisperPrompt !== undefined) setWhisperPrompt(data.whisperPrompt);
+            if (data.enableAiSubtitlePolish !== undefined) setEnableAiSubtitlePolish(data.enableAiSubtitlePolish);
+            if (data.subtitlePolishStyle) setSubtitlePolishStyle(data.subtitlePolishStyle);
             if (data.subtitleFont) setSubtitleFont(data.subtitleFont);
             if (data.subtitleStyle) setSubtitleStyle(data.subtitleStyle);
             if (data.subtitleTextColor) setSubtitleTextColor(data.subtitleTextColor);
@@ -289,6 +293,8 @@ export const useSubtitleState = (videoId = 'default', initialConfig = {}) => {
     watermarkColor,
     watermarkOpacity,
     enableSubtitles,
+    enableAiSubtitlePolish,
+    subtitlePolishStyle,
     maskEnabled,
     masks,
     useCustomSrt,
@@ -304,7 +310,7 @@ export const useSubtitleState = (videoId = 'default', initialConfig = {}) => {
     previewSubtitleText, customSrt, useCustomSrt,
     watermarkType, watermarkText, watermarkImagePreview,
     watermarkX, watermarkY, watermarkSize, watermarkColor, watermarkOpacity,
-    enableSubtitles, maskEnabled, masks,
+    enableSubtitles, enableAiSubtitlePolish, subtitlePolishStyle, maskEnabled, masks,
     useBcutAsr, useLlmSegmentation, whisperPrompt
   });
   
@@ -353,6 +359,8 @@ export const useSubtitleState = (videoId = 'default', initialConfig = {}) => {
       watermarkColor: String(configObj.watermarkColor || ''),
       watermarkOpacity: String(configObj.watermarkOpacity || ''),
       enableSubtitles: Boolean(configObj.enableSubtitles),
+      enableAiSubtitlePolish: Boolean(configObj.enableAiSubtitlePolish),
+      subtitlePolishStyle: String(configObj.subtitlePolishStyle || 'tiktok_viral'),
       maskEnabled: Boolean(configObj.maskEnabled),
       masks: Array.isArray(configObj.masks) ? configObj.masks.map(m => ({
         id: m.id,
@@ -383,6 +391,7 @@ export const useSubtitleState = (videoId = 'default', initialConfig = {}) => {
     subtitleFont, subtitleStyle, subtitleTextColor, subtitleBgColor,
     subtitleFontSize, subtitleMarginV, subtitleBgPadding, subtitleBgOpacity,
     previewSubtitleText, customSrt, useCustomSrt, useBcutAsr, useLlmSegmentation, whisperPrompt,
+    enableAiSubtitlePolish, subtitlePolishStyle,
     // Watermark State values
     watermarkType, watermarkText, watermarkImageFile, watermarkImagePreview,
     watermarkX, watermarkY, watermarkSize, watermarkColor, watermarkOpacity,
@@ -400,6 +409,7 @@ export const useSubtitleState = (videoId = 'default', initialConfig = {}) => {
     setSubtitleFont, setSubtitleStyle, setSubtitleTextColor, setSubtitleBgColor,
     setSubtitleFontSize, setSubtitleMarginV, setSubtitleBgPadding, setSubtitleBgOpacity,
     setPreviewSubtitleText, setCustomSrt, setUseCustomSrt, setUseBcutAsr, setUseLlmSegmentation, setWhisperPrompt,
+    setEnableAiSubtitlePolish, setSubtitlePolishStyle,
     setWatermarkType, setWatermarkText, setWatermarkImageFile, setWatermarkImagePreview,
     setWatermarkX, setWatermarkY, setWatermarkSize, setWatermarkColor, setWatermarkOpacity,
     setEnableSubtitles, setMaskEnabled, setMasks, setActiveMaskId,

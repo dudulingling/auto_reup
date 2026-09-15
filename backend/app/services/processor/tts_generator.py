@@ -21,6 +21,63 @@ class TTSGenerator:
     def __init__(self):
         self._vieneu = None
         self._vieneu_lock = threading.Lock()
+
+    def _get_optimal_workers(self, voice_mode: str, log_callback=None) -> int:
+        """
+        Linh động xác định số luồng (max_workers) sinh TTS dựa trên:
+        1. Loại TTS Provider (Cloud API vs Local GPU).
+        2. Dung lượng VRAM thực tế của máy tính (đặc biệt tối ưu cho GPU 4GB như GTX 1050/1650).
+        """
+        from app.services.processor.colab_bridge import ColabBridge
+        
+        load_dotenv(ENV_PATH, override=True)
+        active_tts = os.getenv("ACTIVE_TTS_PROVIDER", "edge")
+        
+        is_vieneu = (
+            voice_mode.startswith("vieneu_") or 
+            (voice_mode in ["auto", "edge_auto"] and active_tts == "vieneu")
+        )
+        
+        # Nếu là VieNeu chạy trên Colab T4: Colab xử lý trên mây -> sử dụng 2 luồng
+        if is_vieneu and ColabBridge.is_enabled():
+            if log_callback:
+                log_callback("[*] [Worker Tuning] VieNeu chạy qua Colab GPU T4 -> Sử dụng 2 worker song song.\n")
+            return 2
+            
+        # Nếu là VieNeu chạy trên Local GPU
+        if is_vieneu:
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    if log_callback:
+                        log_callback("[*] [Worker Tuning] VieNeu chạy trên CPU -> Giới hạn 1 worker tuần tự.\n")
+                    return 1
+                    
+                total_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+                if total_vram_gb <= 6.0:
+                    # GPU 4GB (GTX 1050 / GTX 1650 / T400) - BẮT BUỘC 1 luồng để chống tràn VRAM
+                    if log_callback:
+                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB (<=6GB) -> Ép 1 worker tuần tự để chống tràn VRAM.\n")
+                    return 1
+                elif total_vram_gb <= 10.0:
+                    # GPU 6GB - 8GB
+                    if log_callback:
+                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB -> Sử dụng 2 worker song song.\n")
+                    return 2
+                else:
+                    # GPU 12GB+
+                    if log_callback:
+                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB -> Sử dụng 3 worker song song.\n")
+                    return 3
+            except Exception:
+                return 1
+
+        # Các Cloud TTS khác (Edge TTS, FPT AI, OpenAI, ElevenLabs): Không tốn VRAM
+        try:
+            custom_workers = int(os.getenv("MAX_TTS_WORKERS", "3"))
+            return max(1, min(custom_workers, 5))
+        except ValueError:
+            return 3
         
     def _get_fpt_audio(self, text: str, voice: str) -> str:
         load_dotenv(ENV_PATH, override=True)
@@ -421,9 +478,9 @@ class TTSGenerator:
                 return None
 
         import concurrent.futures
-        max_workers = 3
+        max_workers = self._get_optimal_workers(voice_mode, log_callback=log_callback)
         results = []
-        if log_callback: log_callback(f"[*] Bắt đầu sinh âm thanh Pipeline bằng {max_workers} luồng xử lý song song...\n")
+        if log_callback: log_callback(f"[*] Bắt đầu sinh âm thanh Pipeline ({max_workers} worker(s) tối ưu cho {voice_mode})...\n")
         
         all_subs = []
         prev_chunk_last_sub = None  # Track last sub of previous chunk for cross-chunk boundary
@@ -743,11 +800,11 @@ class TTSGenerator:
 
         import concurrent.futures
         
-        # Chạy đa luồng! Giữ 3 worker cho nhánh Edit (sequential) để tránh rate limit
-        max_workers = 3
+        # Linh động xác định số worker phù hợp với VRAM và loại TTS
+        max_workers = self._get_optimal_workers(voice_mode, log_callback=log_callback)
         results = []
         
-        if log_callback: log_callback(f"[*] Bắt đầu sinh âm thanh bằng {max_workers} luồng xử lý song song...\n")
+        if log_callback: log_callback(f"[*] Bắt đầu sinh âm thanh ({max_workers} worker(s) tối ưu cho {voice_mode})...\n")
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {}
