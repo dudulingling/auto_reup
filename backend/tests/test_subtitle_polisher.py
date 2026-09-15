@@ -118,10 +118,14 @@ class TestSubtitlePolisher(unittest.TestCase):
         self.assertIn("Phụ đề gốc ban đầu", content)
 
     def test_schema_defaults(self):
-        """Kiểm tra VideoProcessingConfig có default giá trị đúng cho 2 trường mới"""
+        """Kiểm tra VideoProcessingConfig có default giá trị đúng"""
         config = VideoProcessingConfig()
         self.assertTrue(config.enable_ai_subtitle_polish)
         self.assertEqual(config.subtitle_polish_style, "tiktok_viral")
+        self.assertEqual(config.subtitle_bg_opacity, 100)
+
+        custom_config = VideoProcessingConfig(subtitle_bg_opacity=75)
+        self.assertEqual(custom_config.subtitle_bg_opacity, 75)
 
 if __name__ == '__main__':
     unittest.main()

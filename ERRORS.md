@@ -192,3 +192,17 @@
   3. Cập nhật đường dẫn file tạm APK trên Windows sang `tempfile.gettempdir()`.
 - **Prevention**: Luôn sử dụng giao thức truyền Base64 (`ADB_INPUT_B64`) khi tương tác nhập liệu văn bản với thiết bị Android qua ADBKeyBoard để bảo toàn 100% dữ liệu Unicode và tránh shell escaping issues.
 - **Status**: Fixed
+## [2026-09-15 17:45] - Lỗi thiếu thuộc tính subtitle_bg_opacity trên VideoProcessingConfig khi Render (Runtime Error)
+
+- **Type**: Runtime Error
+- **Severity**: High
+- **File**: `backend/app/schemas/processor_config.py:40`, `backend/app/services/processor/video_editor.py:148`
+- **Agent**: Tô Tại Tại
+- **Root Cause**: Schema Pydantic VideoProcessingConfig bị thiếu trường subtitle_bg_opacity. Khi processor_tasks.py khởi tạo config, Pydantic bỏ qua trường này khiến video_editor.py truy cập config.subtitle_bg_opacity bị lỗi AttributeError.
+- **Error Message**: 
+  ```text
+  AttributeError: 'VideoProcessingConfig' object has no attribute 'subtitle_bg_opacity'. Did you mean: 'subtitle_bg_padding'?
+  `
+- **Fix Applied**: Bổ sung subtitle_bg_opacity: Optional[int] = 100 vào VideoProcessingConfig trong processor_config.py; thêm getattr fallback an toàn trong video_editor.py và subtitle_renderer.py.
+- **Prevention**: Luôn đồng bộ schema Pydantic giữa ProcessRequest và VideoProcessingConfig khi thêm tùy chọn render.
+- **Status**: Fixed

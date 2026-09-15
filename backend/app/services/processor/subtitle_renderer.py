@@ -20,7 +20,8 @@ class SubtitleRenderer:
         self.video_height = video_height
         self.font_family = font_family
         self.text_color = hex_to_rgba(text_color)
-        self.bg_color = hex_to_rgba(bg_color, bg_opacity / 100.0)
+        opacity = 100.0 if bg_opacity is None else float(bg_opacity)
+        self.bg_color = hex_to_rgba(bg_color, opacity / 100.0)
         self.margin_v = margin_v  # percentage from bottom
         self.style = style
         

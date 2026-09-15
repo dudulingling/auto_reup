@@ -144,8 +144,10 @@ class VideoEditor:
         subtitle_bg_color = config.subtitle_bg_color
         subtitle_font_size = config.subtitle_font_size
         subtitle_margin_v = config.subtitle_margin_v
-        subtitle_bg_padding = config.subtitle_bg_padding
-        subtitle_bg_opacity = config.subtitle_bg_opacity
+        subtitle_bg_padding = getattr(config, 'subtitle_bg_padding', 2)
+        subtitle_bg_opacity = getattr(config, 'subtitle_bg_opacity', 100)
+        if subtitle_bg_opacity is None:
+            subtitle_bg_opacity = 100
         watermark_type = config.watermark_type
         watermark_text = config.watermark_text
         watermark_image_path = config.watermark_image_path
@@ -212,7 +214,7 @@ class VideoEditor:
                 font_size=config.subtitle_font_size,
                 text_color=config.subtitle_text_color,
                 bg_color=config.subtitle_bg_color,
-                bg_opacity=config.subtitle_bg_opacity,
+                bg_opacity=subtitle_bg_opacity,
                 margin_v=config.subtitle_margin_v,
                 bg_padding=config.subtitle_bg_padding,
                 style=config.subtitle_style
@@ -388,8 +390,10 @@ class VideoEditor:
         subtitle_bg_color = config.subtitle_bg_color
         subtitle_font_size = config.subtitle_font_size
         subtitle_margin_v = config.subtitle_margin_v
-        subtitle_bg_padding = config.subtitle_bg_padding
-        subtitle_bg_opacity = config.subtitle_bg_opacity
+        subtitle_bg_padding = getattr(config, 'subtitle_bg_padding', 2)
+        subtitle_bg_opacity = getattr(config, 'subtitle_bg_opacity', 100)
+        if subtitle_bg_opacity is None:
+            subtitle_bg_opacity = 100
         watermark_type = config.watermark_type
         watermark_text = config.watermark_text
         watermark_image_path = config.watermark_image_path
@@ -445,7 +449,7 @@ class VideoEditor:
                     font_size=config.subtitle_font_size,
                     text_color=config.subtitle_text_color,
                     bg_color=config.subtitle_bg_color,
-                    bg_opacity=config.subtitle_bg_opacity,
+                    bg_opacity=subtitle_bg_opacity,
                     margin_v=config.subtitle_margin_v,
                     bg_padding=config.subtitle_bg_padding,
                     style=config.subtitle_style
