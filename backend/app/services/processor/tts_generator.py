@@ -57,18 +57,18 @@ class TTSGenerator:
                 if total_vram_gb <= 6.0:
                     # GPU 4GB (GTX 1050 / GTX 1650 / T400) - BẮT BUỘC 1 luồng để chống tràn VRAM
                     if log_callback:
-                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB (<=6GB) -> Ép 1 worker tuần tự để chống tràn VRAM.\n")
-                    return 1
+                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB (<=6GB) -> Ép 2 worker tuần tự để chống tràn VRAM.\n")
+                    return 2
                 elif total_vram_gb <= 10.0:
                     # GPU 6GB - 8GB
                     if log_callback:
-                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB -> Sử dụng 2 worker song song.\n")
-                    return 2
+                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB -> Sử dụng 4 worker song song.\n")
+                    return 4
                 else:
                     # GPU 12GB+
                     if log_callback:
-                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB -> Sử dụng 3 worker song song.\n")
-                    return 3
+                        log_callback(f"[*] [Worker Tuning] GPU VRAM {total_vram_gb:.1f}GB -> Sử dụng 6 worker song song.\n")
+                    return 6
             except Exception:
                 return 1
 

@@ -1,6 +1,8 @@
 # 📖 CẨM NANG SỬ DỤNG & CÀI ĐẶT HỆ THỐNG AUTO RE-UP TIKTOK / DOUYIN
 *(Hệ Thống Tự Động Hóa Xây Dựng Kênh Video Ngắn Toàn Diện - Phiên Bản Nâng Cấp Premium)*
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 ---
 
 ## 🚀 1. TỔNG QUAN HỆ THỐNG
@@ -188,6 +190,12 @@ Hệ thống điều hướng chính được tối ưu hóa, chia thành 3 nhó
 > ### 4. Cách Thêm Font Chữ Tự Chọn Cho Phụ Đề
 > Bạn không cần phải sửa code hay cài đặt font vào hệ điều hành của Docker.
 > *   **Giải pháp:** Hãy copy trực tiếp các file font chữ `.ttf` hoặc `.otf` vào thư mục `data/fonts/` trong dự án. F5 lại giao diện web, hệ thống sẽ tự động quét và thêm tên font đó vào danh sách lựa chọn trong cấu hình phụ đề/watermark.
+
+---
+
+## 📄 7. GIẤY PHÉP (LICENSE)
+
+Dự án này được phát hành và bảo hộ dưới giấy phép **GNU General Public License v3.0 (GPL-3.0)**. Xem chi tiết toàn văn điều khoản tại tệp [LICENSE](LICENSE).
 
 ---
 
