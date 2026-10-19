@@ -188,18 +188,27 @@ class DouyinAPIClient:
         return None
 
     def get_video_detail(self, aweme_id: str) -> dict:
-        for aid in ["6383", "1128"]:
-            params = self._default_query()
-            params.update({
-                "aweme_id": aweme_id,
-                "aid": aid,
-            })
-            # Xóa a_bogus cũ nếu có
-            if "a_bogus" in params:
-                del params["a_bogus"]
-            data = self.request_json("/aweme/v1/web/aweme/detail/", params)
-            if data and data.get("aweme_detail"):
-                return data
+        params = self._default_query()
+        params.update({
+            "aweme_id": aweme_id,
+            "aid": "6383",
+        })
+        if "a_bogus" in params:
+            del params["a_bogus"]
+        # Thử HTTP API trước (không auto_retry vì Argus sẽ chặn trên raw HTTP)
+        data = self.request_json("/aweme/v1/web/aweme/detail/", params, auto_retry=False)
+        if data and data.get("aweme_detail"):
+            return data
+
+        # Fallback qua Playwright để giải mã ArgusSecurityPlugin
+        try:
+            from .douyin_browser_crawler import DouyinBrowserCrawler
+            browser_crawler = DouyinBrowserCrawler(cookies=self.cookies, user_agent=self.user_agent)
+            browser_data = browser_crawler.get_video_detail(aweme_id)
+            if browser_data and browser_data.get("aweme_detail"):
+                return browser_data
+        except Exception:
+            pass
         return {}
 
     def get_user_post(self, sec_uid: str, max_cursor: int = 0, count: int = 35) -> dict:
@@ -213,7 +222,24 @@ class DouyinAPIClient:
             "need_time_list": "1",
             "time_list_query": "0",
         })
-        return self.request_json("/aweme/v1/web/aweme/post/", params)
+        data = self.request_json("/aweme/v1/web/aweme/post/", params, auto_retry=False)
+        if data and data.get("aweme_list"):
+            return data
+
+        # Fallback qua Playwright nếu HTTP API bị chặn
+        try:
+            from .douyin_browser_crawler import DouyinBrowserCrawler
+            browser_crawler = DouyinBrowserCrawler(cookies=self.cookies, user_agent=self.user_agent)
+            _, videos = browser_crawler.get_profile_and_posts(sec_uid, max_videos=count)
+            if videos:
+                return {
+                    "aweme_list": videos,
+                    "has_more": False,
+                    "max_cursor": 0
+                }
+        except Exception:
+            pass
+        return {}
 
     def get_user_profile(self, sec_uid: str) -> dict:
         """Fetch detailed Douyin user profile using sec_uid."""
@@ -223,7 +249,20 @@ class DouyinAPIClient:
             "publish_video_strategy_type": "2",
             "personal_center_strategy": "1",
         })
-        return self.request_json("/aweme/v1/web/user/profile/other/", params)
+        data = self.request_json("/aweme/v1/web/user/profile/other/", params, auto_retry=False)
+        if data and data.get("user"):
+            return data
+
+        # Fallback qua Playwright nếu HTTP API bị chặn
+        try:
+            from .douyin_browser_crawler import DouyinBrowserCrawler
+            browser_crawler = DouyinBrowserCrawler(cookies=self.cookies, user_agent=self.user_agent)
+            profile_data, _ = browser_crawler.get_profile_and_posts(sec_uid, max_videos=1)
+            if profile_data:
+                return {"user": profile_data}
+        except Exception:
+            pass
+        return {}
 
     def get_hot_search_board(self) -> dict:
         """Lấy danh sách bảng xếp hạng từ khóa hot trend của Douyin"""

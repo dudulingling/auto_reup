@@ -32,25 +32,22 @@ def update_env_file(cookie_str: str, user_agent: str = None):
                 break
                 
         cookie_dict = {}
-        has_login_cookie = False
+        old_login_cookies = {}
         if old_cookie_encrypted:
             try:
                 # Giải mã cookie cũ
                 from app.core.security import decrypt_data
                 old_cookie_str = decrypt_data(old_cookie_encrypted).strip()
+                login_keys = {"sessionid", "sessionid_ss", "sid_guard", "uid_tt", "uid_tt_ss", "sid_tt", "passport_csrf_token", "passport_csrf_token_default"}
                 for part in old_cookie_str.split(";"):
                     part = part.strip()
                     if "=" in part:
                         k, v = part.split("=", 1)
                         cookie_dict[k] = v
-                        if k == "sessionid_ss" and v:
-                            has_login_cookie = True
+                        if k in login_keys and v:
+                            old_login_cookies[k] = v
             except Exception as decrypt_err:
                 logger.error(f"Lỗi giải mã cookie cũ khi gộp: {decrypt_err}")
-
-        if has_login_cookie:
-            logger.info("Đã phát hiện Cookie đăng nhập (sessionid_ss) trong Cấu hình. BỎ QUA GHI ĐÈ để bảo vệ Cookie gốc.")
-            return
 
         # Parse cookie mới lấy từ Playwright và ghi đè/bổ sung vào dict
         for part in cookie_str.split(";"):
@@ -58,7 +55,12 @@ def update_env_file(cookie_str: str, user_agent: str = None):
             if "=" in part:
                 k, v = part.split("=", 1)
                 cookie_dict[k] = v
-                
+
+        # Bảo vệ và khôi phục cookie đăng nhập nếu cookie mới từ Playwright là phiên khách (chưa đăng nhập)
+        for k, v in old_login_cookies.items():
+            if not cookie_dict.get(k):
+                cookie_dict[k] = v
+
         # Dựng lại cookie string đã gộp
         merged_cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
         

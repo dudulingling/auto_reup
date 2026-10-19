@@ -65,3 +65,8 @@ def _save_metadata_listener(mapper, connection, target):
 event.listen(VideoHistory, 'after_insert', _save_metadata_listener)
 event.listen(VideoHistory, 'after_update', _save_metadata_listener)
 
+try:
+    import app.models.upload_schedule
+except ImportError:
+    pass
+

@@ -82,58 +82,34 @@ class DouyinScraper:
             aweme = data.get("aweme_detail")
             
             if not aweme:
-                yield "[*] API bị chặn, đang thử trích xuất bằng mã HTML thuần...\n"
+                yield "[*] API bị chặn, đang kích hoạt giải mã Playwright ngầm...\n"
                 try:
-                    import httpx
-                    import re
-                    import urllib.parse
-                    import json
-                    
-                    html_resp = httpx.get(
-                        f"https://www.douyin.com/video/{video_id_match}", 
-                        headers=client.headers, 
-                        cookies=client.cookies, 
-                        timeout=10, 
-                        follow_redirects=True
-                    )
-                    match = re.search(r'<script id="RENDER_DATA" type="application/json">(.*?)</script>', html_resp.text)
-                    if match:
-                        render_data_str = urllib.parse.unquote(match.group(1))
-                        render_data = json.loads(render_data_str)
-                        
-                        def find_url_list(d):
-                            if isinstance(d, dict):
-                                if "playAddr" in d and isinstance(d["playAddr"], list) and len(d["playAddr"]) > 0:
-                                    return d["playAddr"][0].get("src")
-                                if "play_addr" in d and "url_list" in d["play_addr"] and d["play_addr"]["url_list"]:
-                                    return d["play_addr"]["url_list"][0]
-                                for k, v in d.items():
-                                    res = find_url_list(v)
-                                    if res: return res
-                            elif isinstance(d, list):
-                                for item in d:
-                                    res = find_url_list(item)
-                                    if res: return res
-                            return None
-                        
-                        found_url = find_url_list(render_data)
-                        if found_url:
-                            if found_url.startswith("//"): 
-                                found_url = "https:" + found_url
-                            aweme = {"video": {"play_addr": {"url_list": [found_url]}}, "author": {"nickname": "HTML_Scrape"}}
-                except Exception as e:
-                    logger.error(f"HTML Scrape Error: {e}")
+                    from .douyin_browser_crawler import DouyinBrowserCrawler
+                    browser_crawler = DouyinBrowserCrawler(cookies=client.cookies, user_agent=client.user_agent)
+                    b_data = browser_crawler.get_video_detail(video_id_match)
+                    if b_data and b_data.get("aweme_detail"):
+                        aweme = b_data["aweme_detail"]
+                except Exception as b_err:
+                    logger.error(f"Browser Scrape Error: {b_err}")
             
             if not aweme:
                 yield "[!] Không tìm thấy chi tiết video. Link lỗi, video bị xóa hoặc bị chặn.\n"
                 return
                 
-            try:
-                video_urls = aweme["video"]["play_addr"]["url_list"]
-                if not video_urls: raise ValueError("Empty URL list")
-            except (KeyError, IndexError, TypeError, ValueError):
-                yield "[!] Không thể lấy link tải trực tiếp của video này (có thể là dạng hình ảnh).\n"
+            video_urls = []
+            for br in aweme.get("video", {}).get("bit_rate", []):
+                for u in br.get("play_addr", {}).get("url_list", []):
+                    if u and u not in video_urls:
+                        video_urls.append(u)
+            for u in aweme.get("video", {}).get("play_addr", {}).get("url_list", []):
+                if u and u not in video_urls:
+                    video_urls.append(u)
+
+            if not video_urls:
+                yield "[!] Không thể lấy link tải trực tiếp của video này (có thể là dạng hình ảnh/slideshow).\n"
                 return
+
+            video_urls.sort(key=lambda x: 0 if "aweme/v1/play" in x else 1)
                 
             uploader = aweme.get("author", {}).get("nickname", "Unknown User")
             
@@ -243,7 +219,21 @@ class DouyinScraper:
             aweme_list = data.get("aweme_list", [])
             if not aweme_list:
                 if total_fetched == 0:
-                    yield "[!] Không tìm thấy video nào. Có thể do tài khoản bị khóa riêng tư, hoặc thuật toán chống bot quá mạnh (Hệ thống Playwright đã thử vượt Captcha ngầm nhưng không thành công). Vui lòng cập nhật Cookie thủ công!\n"
+                    yield "[*] Đang thử bóc tách danh sách video kênh qua Playwright ngầm...\n"
+                    try:
+                        from .douyin_browser_crawler import DouyinBrowserCrawler
+                        browser_crawler = DouyinBrowserCrawler(cookies=client.cookies, user_agent=client.user_agent)
+                        b_prof, b_vids = browser_crawler.get_profile_and_posts(sec_uid, max_videos=50, check_cancel=check_cancel)
+                        if b_vids:
+                            aweme_list = b_vids
+                            if b_prof and not profile_data:
+                                profile_data = b_prof
+                    except Exception as b_err:
+                        logger.error(f"Browser profile scrape error: {b_err}")
+
+            if not aweme_list:
+                if total_fetched == 0:
+                    yield "[!] Không tìm thấy video nào. Có thể do tài khoản bị khóa riêng tư, hoặc thuật toán chống bot quá mạnh. Vui lòng cập nhật Cookie thủ công!\n"
                 break
                 
             if aweme_list and not profile_data:
@@ -272,8 +262,17 @@ class DouyinScraper:
                     continue
                 
                 try:
-                    video_urls = aweme["video"]["play_addr"]["url_list"]
-                    if not video_urls: continue
+                    video_urls = []
+                    for br in aweme.get("video", {}).get("bit_rate", []):
+                        for u in br.get("play_addr", {}).get("url_list", []):
+                            if u and u not in video_urls:
+                                video_urls.append(u)
+                    for u in aweme.get("video", {}).get("play_addr", {}).get("url_list", []):
+                        if u and u not in video_urls:
+                            video_urls.append(u)
+                    if not video_urls:
+                        continue
+                    video_urls.sort(key=lambda x: 0 if "aweme/v1/play" in x else 1)
                 except (KeyError, IndexError, TypeError):
                     # Skip image-based videos / corrupted metadata
                     continue
@@ -337,8 +336,11 @@ class DouyinScraper:
             
             for attempt in range(max_retries_per_url):
                 try:
+                    dl_headers = dict(client.headers)
+                    if "douyinvod.com" in video_url:
+                        dl_headers["Referer"] = ""
                     with httpx.Client() as hx_client:
-                        with hx_client.stream("GET", video_url, headers=client.headers, cookies=client.cookies, timeout=30, follow_redirects=True) as response:
+                        with hx_client.stream("GET", video_url, headers=dl_headers, cookies=client.cookies, timeout=30, follow_redirects=True) as response:
                             response.raise_for_status()
                             
                             total_size = int(response.headers.get('content-length', 0))
